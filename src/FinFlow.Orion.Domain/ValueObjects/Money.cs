@@ -1,14 +1,14 @@
-using FinFlow.Orion.Domain.Primitives;
 using System.Globalization;
+using FinFlow.Orion.Domain.Primitives;
 
 namespace FinFlow.Orion.Domain.ValueObjects;
 
 public class Money : ValueObject
 {
     public decimal Amount { get; }
-    public string CurrencyCode { get; }
+    public string CurrencyCode { get; } = null!;
 
-    private Money() { } // EF Core
+    private Money() { }
 
     public Money(decimal amount, string currencyCode)
     {

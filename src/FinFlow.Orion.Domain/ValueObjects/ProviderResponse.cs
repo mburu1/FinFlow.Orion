@@ -4,8 +4,8 @@ namespace FinFlow.Orion.Domain.ValueObjects;
 
 public class ProviderResponse : ValueObject
 {
-    public string ProviderTransactionId { get; }
-    public string Status { get; }
+    public string ProviderTransactionId { get; } = null!;
+    public string Status { get; } = null!;
     public string? Message { get; }
     public DateTime ReceivedAt { get; }
 

@@ -4,8 +4,8 @@ namespace FinFlow.Orion.Domain.ValueObjects;
 
 public class PhoneNumber : ValueObject
 {
-    public string Number { get; }
-    public string CountryCode { get; }
+    public string Number { get; } = null!;
+    public string CountryCode { get; } = null!;
 
     private PhoneNumber() { }
 

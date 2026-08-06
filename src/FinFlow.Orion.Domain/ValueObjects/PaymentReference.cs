@@ -4,7 +4,7 @@ namespace FinFlow.Orion.Domain.ValueObjects;
 
 public class PaymentReference : ValueObject
 {
-    public string Reference { get; }
+    public string Reference { get; } = null!;
 
     private PaymentReference() { }
 

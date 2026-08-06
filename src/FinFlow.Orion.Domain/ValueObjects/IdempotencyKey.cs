@@ -1,12 +1,12 @@
-using FinFlow.Orion.Domain.Primitives;
 using System.Security.Cryptography;
 using System.Text;
+using FinFlow.Orion.Domain.Primitives;
 
 namespace FinFlow.Orion.Domain.ValueObjects;
 
 public class IdempotencyKey : ValueObject
 {
-    public string Value { get; }
+    public string Value { get; } = null!;
 
     private IdempotencyKey() { }
 
