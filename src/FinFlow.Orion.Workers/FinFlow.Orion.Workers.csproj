@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-FinFlow.Orion.Workers-97cadd66-6ca5-41eb-b1ff-9df1838c054e</UserSecretsId>
+    <Platforms>AnyCPU;x64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+    <PackageReference Include="Quartz" Version="3.19.1" />
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="3.19.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FinFlow.Orion.Application\FinFlow.Orion.Application.csproj" />
+    <ProjectReference Include="..\FinFlow.Orion.Infrastructure\FinFlow.Orion.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,35 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/FinFlow.Orion.Admin/FinFlow.Orion.Admin.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="src/FinFlow.Orion.Api/FinFlow.Orion.Api.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="src/FinFlow.Orion.Application/FinFlow.Orion.Application.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="src/FinFlow.Orion.Contracts/FinFlow.Orion.Contracts.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="src/FinFlow.Orion.Domain/FinFlow.Orion.Domain.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="src/FinFlow.Orion.Infrastructure/FinFlow.Orion.Infrastructure.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="src/FinFlow.Orion.Ledger/FinFlow.Orion.Ledger.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="src/FinFlow.Orion.Webhooks/FinFlow.Orion.Webhooks.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="src/FinFlow.Orion.Workers/FinFlow.Orion.Workers.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+  </Folder>
+</Solution>
