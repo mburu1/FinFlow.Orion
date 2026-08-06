@@ -1,3 +1,5 @@
+using FinFlow.Orion.Domain.Abstractions;
+
 namespace FinFlow.Orion.Domain.Primitives;
 
 public abstract class Entity
