@@ -1,0 +1,209 @@
+@page "/"
+@using FinFlow.Orion.Contracts.Common
+@using FinFlow.Orion.Contracts.Payments.Responses
+@inject IPaymentService PaymentService
+@inject ILogger<Dashboard> Logger
+
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Dashboard</h1>
+        <p class="subtitle">Payment Orchestration & Reconciliation Engine</p>
+    </div>
+
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-icon">💳</div>
+            <div class="metric-content">
+                <h3>Total Payments</h3>
+                <p class="metric-value">@TotalPayments</p>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">✅</div>
+            <div class="metric-content">
+                <h3>Completed</h3>
+                <p class="metric-value">@CompletedPayments</p>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">⏳</div>
+            <div class="metric-content">
+                <h3>Pending</h3>
+                <p class="metric-value">@PendingPayments</p>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">❌</div>
+            <div class="metric-content">
+                <h3>Failed</h3>
+                <p class="metric-value">@FailedPayments</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-section">
+        <div class="info-box">
+            <h2>System Status</h2>
+            <ul>
+                <li>✓ API Gateway: <strong>Online</strong></li>
+                <li>✓ SQL Server: <strong>Connected</strong></li>
+                <li>✓ MongoDB: <strong>Connected</strong></li>
+                <li>✓ Quartz.NET Workers: <strong>Running</strong></li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h2>Quick Links</h2>
+            <ul>
+                <li><a href="/payments">View All Payments</a></li>
+                <li><a href="/reconciliation">Run Reconciliation</a></li>
+                <li><a href="/discrepancies">Review Discrepancies</a></li>
+                <li><a href="/webhooks">Webhook Events</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+@code {
+    private int TotalPayments = 0;
+    private int CompletedPayments = 0;
+    private int PendingPayments = 0;
+    private int FailedPayments = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Placeholder metrics — in production, call the API
+            TotalPayments = 1250;
+            CompletedPayments = 1180;
+            PendingPayments = 45;
+            FailedPayments = 25;
+
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading dashboard metrics");
+        }
+    }
+}
+
+<style>
+    .dashboard-container {
+        padding: 30px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        min-height: 100vh;
+    }
+
+    .dashboard-header {
+        margin-bottom: 40px;
+        text-align: center;
+    }
+
+    .dashboard-header h1 {
+        font-size: 36px;
+        color: #1a1a1a;
+        margin: 0;
+    }
+
+    .subtitle {
+        color: #666;
+        margin-top: 8px;
+        font-size: 14px;
+    }
+
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+        margin-bottom: 40px;
+    }
+
+    .metric-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .metric-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .metric-icon {
+        font-size: 32px;
+    }
+
+    .metric-content h3 {
+        margin: 0;
+        font-size: 12px;
+        color: #999;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .metric-value {
+        margin: 8px 0 0 0;
+        font-size: 28px;
+        font-weight: 700;
+        color: #1a1a1a;
+    }
+
+    .info-section {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+    }
+
+    .info-box {
+        background: white;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .info-box h2 {
+        margin-top: 0;
+        font-size: 18px;
+        color: #1a1a1a;
+        border-bottom: 2px solid #0d47a1;
+        padding-bottom: 12px;
+    }
+
+    .info-box ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .info-box li {
+        padding: 10px 0;
+        color: #555;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .info-box li:last-child {
+        border-bottom: none;
+    }
+
+    .info-box a {
+        color: #0d47a1;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.3s ease;
+    }
+
+    .info-box a:hover {
+        color: #1565c0;
+        text-decoration: underline;
+    }
+</style>

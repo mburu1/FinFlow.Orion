@@ -1,0 +1,108 @@
+@page "/discrepancies"
+@using FinFlow.Orion.Contracts.Common
+@using FinFlow.Orion.Contracts.Reconciliation.Responses
+@inject ILogger<Discrepancies> Logger
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Discrepancies</h1>
+        <p>Review and resolve payment discrepancies detected during reconciliation</p>
+    </div>
+
+    <div class="filter-section">
+        <select class="filter-select" @onchange="@((ChangeEventArgs e) => SelectedType = e.Value?.ToString() ?? string.Empty)">
+            <option value="">All Types</option>
+            <option value="AmountMismatch">Amount Mismatch</option>
+            <option value="StatusMismatch">Status Mismatch</option>
+            <option value="Missing">Missing</option>
+        </select>
+
+        <select class="filter-select" @onchange="@((ChangeEventArgs e) => ShowResolved = e.Value?.ToString() ?? "false" == "true")">
+            <option value="false">Unresolved Only</option>
+            <option value="true">All</option>
+        </select>
+
+        <button class="btn-primary" @onclick="LoadDiscrepancies">Refresh</button>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="loading">Loading discrepancies...</div>
+    }
+    else if (Discrepancies.Count == 0)
+    {
+        <div class="no-data">No discrepancies found</div>
+    }
+    else
+    {
+        <div class="discrepancies-list">
+            @foreach (var disc in Discrepancies)
+            {
+                <div class="@($"discrepancy-card {(disc.IsResolved ? "resolved" : "unresolved")}")">
+                    <div class="card-header">
+                        <span class="payment-ref">@disc.PaymentReference</span>
+                        <span class="@($"badge badge-{disc.DiscrepancyType?.ToLower()}")">@disc.DiscrepancyType</span>
+                        @if (disc.IsResolved)
+                        {
+                            <span class="badge-resolved">✓ Resolved</span>
+                        }
+                    </div>
+
+                    <div class="card-body">
+                        <div class="discrepancy-detail">
+                            <span class="label">Internal Amount:</span>
+                            <span class="value">@disc.InternalAmount.ToString("C")</span>
+                        </div>
+                        <div class="discrepancy-detail">
+                            <span class="label">Provider Amount:</span>
+                            <span class="value">@disc.ProviderAmount.ToString("C")</span>
+                        </div>
+                        <div class="discrepancy-detail">
+                            <span class="label">Difference:</span>
+                            <span class="value difference">@disc.DifferenceAmount.ToString("C")</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(disc.Notes))
+                        {
+                            <div class="discrepancy-detail">
+                                <span class="label">Notes:</span>
+                                <span class="value">@disc.Notes</span>
+                            </div>
+                        }
+                    </div>
+
+                    @if (!disc.IsResolved)
+                    {
+                        <div class="card-footer">
+                            <button class="btn-resolve" @onclick="@(() => ResolveDiscrepancy(disc.DiscrepancyId))">
+                                Mark as Resolved
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<DiscrepancyResponse> Discrepancies = new();
+    private bool IsLoading = false;
+    private string SelectedType = string.Empty;
+    private bool ShowResolved = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDiscrepancies();
+    }
+
+    private async Task LoadDiscrepancies()
+    {
+        try
+        {
+            IsLoading = true;
+
+            // Placeholder data
+            Discrepancies = new List<DiscrepancyResponse>
+            {
+                new DiscrepancyResponse { DiscrepancyId = Guid.NewGuid(), PaymentReference = "PAY-001", DiscrepancyType = "AmountMismatch", InternalAmount = 5000, ProviderAmount = 4950, DifferenceAmount = 50, CurrencyCode = "KES", IsResolved = false, DetectedAt = DateTime.UtcNow.AddHours(-5) },
+                new Discrepanc

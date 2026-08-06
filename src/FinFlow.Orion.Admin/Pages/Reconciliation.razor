@@ -1,0 +1,359 @@
+@page "/reconciliation"
+@using FinFlow.Orion.Contracts.Reconciliation.Requests
+@using FinFlow.Orion.Contracts.Reconciliation.Responses
+@inject ILogger<Reconciliation> Logger
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Reconciliation</h1>
+        <p>Trigger and monitor payment reconciliation jobs</p>
+    </div>
+
+    <div class="trigger-section">
+        <div class="trigger-card">
+            <h2>Trigger Reconciliation</h2>
+
+            <div class="form-group">
+                <label>Payment Provider</label>
+                <select class="form-control" @bind="SelectedProvider">
+                    <option value="">-- Select Provider --</option>
+                    <option value="MPesa">M-Pesa</option>
+                    <option value="Card">Card</option>
+                    <option value="BankTransfer">Bank Transfer</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Reconciliation Date</label>
+                <input type="date" class="form-control" @bind="ReconDate" />
+            </div>
+
+            <button class="btn-primary" @onclick="TriggerReconciliation" disabled="@IsTriggering">
+                @(IsTriggering ? "Triggering..." : "Trigger Reconciliation")
+            </button>
+
+            @if (!string.IsNullOrEmpty(TriggerMessage))
+            {
+                <div class="@($"alert alert-{TriggerMessageType}")">
+                    @TriggerMessage
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="reports-section">
+        <h2>Recent Reports</h2>
+
+        @if (Reports.Count == 0)
+        {
+            <div class="no-data">No reconciliation reports found</div>
+        }
+        else
+        {
+            <div class="reports-grid">
+                @foreach (var report in Reports)
+                {
+                    <div class="report-card">
+                        <div class="report-header">
+                            <h3>@report.ReportReference</h3>
+                            <span class="@($"badge-status badge-{report.Status?.ToLower()}")">@report.Status</span>
+                        </div>
+                        <div class="report-body">
+                            <p><strong>Provider:</strong> @report.Provider</p>
+                            <p><strong>Date:</strong> @report.ReconDate</p>
+                            <p><strong>Matched:</strong> @report.MatchedCount / @report.TotalTransactions</p>
+                            <p><strong>Discrepancies:</strong> @report.UnmatchedCount</p>
+                        </div>
+                        <div class="report-footer">
+                            <button class="btn-small" @onclick="@(() => ViewReport(report.ReportId))">View Details</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string SelectedProvider = string.Empty;
+    private DateTime ReconDate = DateTime.Today.AddDays(-1);
+    private bool IsTriggering = false;
+    private string TriggerMessage = string.Empty;
+    private string TriggerMessageType = string.Empty;
+    private List<ReconciliationReportResponse> Reports = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReports();
+    }
+
+    private async Task TriggerReconciliation()
+    {
+        if (string.IsNullOrEmpty(SelectedProvider))
+        {
+            TriggerMessage = "Please select a provider";
+            TriggerMessageType = "error";
+            return;
+        }
+
+        try
+        {
+            IsTriggering = true;
+            TriggerMessage = string.Empty;
+
+            // Placeholder — in production, call the API
+            var newReport = new ReconciliationReportResponse
+            {
+                ReportId = Guid.NewGuid(),
+                ReportReference = $"RECON-{SelectedProvider}-{ReconDate:yyyyMMdd}",
+                Provider = SelectedProvider,
+                ReconDate = DateOnly.FromDateTime(ReconDate),
+                Status = "Completed",
+                TotalTransactions = 150,
+                MatchedCount = 148,
+                UnmatchedCount = 2,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            Reports.Insert(0, newReport);
+            TriggerMessage = $"Reconciliation triggered for {SelectedProvider}";
+            TriggerMessageType = "success";
+
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error triggering reconciliation");
+            TriggerMessage = "Error triggering reconciliation";
+            TriggerMessageType = "error";
+        }
+        finally
+        {
+            IsTriggering = false;
+        }
+    }
+
+    private async Task LoadReports()
+    {
+        try
+        {
+            // Placeholder data
+            Reports = new List<ReconciliationReportResponse>
+            {
+                new ReconciliationReportResponse { ReportId = Guid.NewGuid(), ReportReference = "RECON-MPesa-20260806", Provider = "MPesa", ReconDate = DateOnly.FromDateTime(DateTime.Today), Status = "Completed", TotalTransactions = 250, MatchedCount = 248, UnmatchedCount = 2, CreatedAt = DateTime.UtcNow.AddHours(-3) },
+                new ReconciliationReportResponse { ReportId = Guid.NewGuid(), ReportReference = "RECON-Card-20260806", Provider = "Card", ReconDate = DateOnly.FromDateTime(DateTime.Today), Status = "Completed", TotalTransactions = 120, MatchedCount = 120, UnmatchedCount = 0, CreatedAt = DateTime.UtcNow.AddHours(-2) },
+            };
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading reports");
+        }
+    }
+
+    private void ViewReport(Guid reportId)
+    {
+        Logger.LogInformation("Viewing report: {ReportId}", reportId);
+    }
+}
+
+<style>
+    .page-container {
+        padding: 30px;
+        background: #f5f7fa;
+        min-height: 100vh;
+    }
+
+    .page-header {
+        margin-bottom: 30px;
+    }
+
+        .page-header h1 {
+            margin: 0;
+            font-size: 28px;
+            color: #1a1a1a;
+        }
+
+        .page-header p {
+            margin: 8px 0 0 0;
+            color: #666;
+        }
+
+    .trigger-section {
+        margin-bottom: 40px;
+    }
+
+    .trigger-card {
+        background: white;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        max-width: 400px;
+    }
+
+        .trigger-card h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #1a1a1a;
+        }
+
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #1a1a1a;
+            font-size: 14px;
+        }
+
+    .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        box-sizing: border-box;
+    }
+
+    .btn-primary {
+        width: 100%;
+        padding: 12px;
+        background: #0d47a1;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: background 0.3s ease;
+    }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #1565c0;
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+    .alert {
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .alert-success {
+        background: #c8e6c9;
+        color: #2e7d32;
+        border: 1px solid #81c784;
+    }
+
+    .alert-error {
+        background: #ffcdd2;
+        color: #c62828;
+        border: 1px solid #ef5350;
+    }
+
+    .reports-section h2 {
+        margin-top: 0;
+        font-size: 20px;
+        color: #1a1a1a;
+    }
+
+    .reports-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+    }
+
+    .report-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease;
+    }
+
+        .report-card:hover {
+            transform: translateY(-4px);
+        }
+
+    .report-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 12px;
+    }
+
+        .report-header h3 {
+            margin: 0;
+            font-size: 16px;
+            color: #0d47a1;
+        }
+
+    .badge-status {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .badge-completed {
+        background: #c8e6c9;
+        color: #2e7d32;
+    }
+
+    .badge-inprogress {
+        background: #fff9c4;
+        color: #f57f17;
+    }
+
+    .badge-discrepancyfound {
+        background: #ffcdd2;
+        color: #c62828;
+    }
+
+    .report-body p {
+        margin: 8px 0;
+        font-size: 14px;
+        color: #555;
+    }
+
+    .report-body strong {
+        color: #1a1a1a;
+    }
+
+    .report-footer {
+        margin-top: 16px;
+        text-align: center;
+    }
+
+    .btn-small {
+        padding: 8px 16px;
+        background: #0d47a1;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-small:hover {
+            background: #1565c0;
+        }
+
+    .no-data {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+    }
+</style>

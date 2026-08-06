@@ -1,0 +1,258 @@
+@page "/payments"
+@using FinFlow.Orion.Contracts.Common
+@using FinFlow.Orion.Contracts.Payments.Responses
+@inject IPaymentService PaymentService
+@inject ILogger<Payments> Logger
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Payments</h1>
+        <p>Browse and manage all payment transactions</p>
+    </div>
+
+    <div class="controls">
+        <input type="text"
+               placeholder="Search by Payment ID or Reference..."
+               class="search-box"
+               @onchange="@((ChangeEventArgs e) => SearchTerm = e.Value?.ToString() ?? string.Empty)" />
+
+        <select class="filter-select" @onchange="@((ChangeEventArgs e) => SelectedStatus = e.Value?.ToString() ?? string.Empty)">
+            <option value="">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Captured">Captured</option>
+            <option value="Failed">Failed</option>
+            <option value="Reversed">Reversed</option>
+        </select>
+
+        <button class="btn-primary" @onclick="LoadPayments">Refresh</button>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="loading">Loading payments...</div>
+    }
+    else if (Payments.Count == 0)
+    {
+        <div class="no-data">No payments found</div>
+    }
+    else
+    {
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Reference</th>
+                        <th>Amount</th>
+                        <th>Provider</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var payment in Payments)
+                    {
+                        <tr class="@($"status-{payment.Status?.ToLower()}")">
+                            <td class="ref-cell">@payment.Reference</td>
+                            <td class="amount-cell">@payment.Amount.ToString("C")</td>
+                            <td>@payment.Provider</td>
+                            <td>
+                                <span class="@($"badge badge-{payment.Status?.ToLower()}")">
+                                    @payment.Status
+                                </span>
+                            </td>
+                            <td>@payment.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>
+                                <button class="btn-small" @onclick="@(() => ViewPaymentDetails(payment.PaymentId))">View</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<PaymentSummaryDto> Payments = new();
+    private bool IsLoading = false;
+    private string SearchTerm = string.Empty;
+    private string SelectedStatus = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPayments();
+    }
+
+    private async Task LoadPayments()
+    {
+        try
+        {
+            IsLoading = true;
+            // Placeholder data
+            Payments = new List<PaymentSummaryDto>
+            {
+                new PaymentSummaryDto { PaymentId = Guid.NewGuid(), Reference = "PAY-001", Amount = 5000, CurrencyCode = "KES", Status = "Captured", Provider = "MPesa", CreatedAt = DateTime.UtcNow.AddHours(-2) },
+                new PaymentSummaryDto { PaymentId = Guid.NewGuid(), Reference = "PAY-002", Amount = 15000, CurrencyCode = "KES", Status = "Pending", Provider = "Card", CreatedAt = DateTime.UtcNow.AddHours(-1) },
+                new PaymentSummaryDto { PaymentId = Guid.NewGuid(), Reference = "PAY-003", Amount = 8500, CurrencyCode = "KES", Status = "Failed", Provider = "BankTransfer", CreatedAt = DateTime.UtcNow.AddMinutes(-30) },
+            };
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading payments");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void ViewPaymentDetails(Guid paymentId)
+    {
+        Logger.LogInformation("Viewing payment details: {PaymentId}", paymentId);
+    }
+}
+
+<style>
+    .page-container {
+        padding: 30px;
+        background: #f5f7fa;
+        min-height: 100vh;
+    }
+
+    .page-header {
+        margin-bottom: 30px;
+    }
+
+        .page-header h1 {
+            margin: 0;
+            font-size: 28px;
+            color: #1a1a1a;
+        }
+
+        .page-header p {
+            margin: 8px 0 0 0;
+            color: #666;
+        }
+
+    .controls {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+
+    .search-box,
+    .filter-select {
+        padding: 10px 14px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .search-box {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .btn-primary,
+    .btn-small {
+        padding: 10px 16px;
+        background: #0d47a1;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: background 0.3s ease;
+    }
+
+        .btn-primary:hover {
+            background: #1565c0;
+        }
+
+    .btn-small {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    .loading,
+    .no-data {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+    }
+
+    .table-container {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .data-table thead {
+            background: #f0f0f0;
+        }
+
+        .data-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #1a1a1a;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .data-table tbody tr:hover {
+            background: #f9f9f9;
+        }
+
+    .ref-cell {
+        font-weight: 600;
+        color: #0d47a1;
+    }
+
+    .amount-cell {
+        font-weight: 600;
+        color: #2e7d32;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .badge-captured {
+        background: #c8e6c9;
+        color: #2e7d32;
+    }
+
+    .badge-pending {
+        background: #fff9c4;
+        color: #f57f17;
+    }
+
+    .badge-failed {
+        background: #ffcdd2;
+        color: #c62828;
+    }
+
+    .badge-reversed {
+        background: #e1bee7;
+        color: #6a1b9a;
+    }
+</style>

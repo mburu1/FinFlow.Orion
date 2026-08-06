@@ -1,0 +1,565 @@
+@page "/webhooks"
+@using FinFlow.Orion.Contracts.Common
+@using FinFlow.Orion.Contracts.Webhooks.Responses
+@inject ILogger<Webhooks> Logger
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Webhooks</h1>
+        <p>Monitor and manage incoming webhook events from payment providers</p>
+    </div>
+
+    <div class="filter-section">
+        <select class="filter-select" @onchange="@((ChangeEventArgs e) => SelectedProvider = e.Value?.ToString() ?? string.Empty)">
+            <option value="">All Providers</option>
+            <option value="MPesa">M-Pesa</option>
+            <option value="Card">Card</option>
+            <option value="BankTransfer">Bank Transfer</option>
+        </select>
+
+        <select class="filter-select" @onchange="@((ChangeEventArgs e) => SelectedStatus = e.Value?.ToString() ?? string.Empty)">
+            <option value="">All Statuses</option>
+            <option value="Processed">Processed</option>
+            <option value="Pending">Pending</option>
+            <option value="Failed">Failed</option>
+        </select>
+
+        <button class="btn-primary" @onclick="LoadWebhooks">Refresh</button>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="loading">Loading webhook events...</div>
+    }
+    else if (Webhooks.Count == 0)
+    {
+        <div class="no-data">No webhook events found</div>
+    }
+    else
+    {
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Event ID</th>
+                        <th>Provider</th>
+                        <th>Event Type</th>
+                        <th>Payment Ref</th>
+                        <th>Status</th>
+                        <th>Received</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var webhook in Webhooks)
+                    {
+                        <tr class="@($"status-{webhook.IsProcessed.ToString().ToLower()}")">
+                            <td class="event-id">@webhook.WebhookEventId.ToString("N").Substring(0, 8)...</td>
+                            <td>@webhook.Provider</td>
+                            <td>
+                                <span class="event-type">@webhook.EventType</span>
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(webhook.PaymentReference))
+                                {
+                                    <span class="payment-ref">@webhook.PaymentReference</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="@($"badge badge-{(webhook.IsProcessed ? "processed" : "pending")}")">
+                                    @(webhook.IsProcessed ? "Processed" : "Pending")
+                                </span>
+                            </td>
+                            <td class="timestamp">@webhook.ReceivedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>
+                                <button class="btn-small" @onclick="@(() => ViewWebhookDetails(webhook.WebhookEventId))">View</button>
+                                @if (!webhook.IsProcessed)
+                                {
+                                    <button class="btn-small btn-replay" @onclick="@(() => ReplayWebhook(webhook.WebhookEventId))">Replay</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination">
+            <button class="btn-nav" @onclick="PreviousPage" disabled="@(CurrentPage == 1)">← Previous</button>
+            <span class="page-info">Page @CurrentPage of @TotalPages</span>
+            <button class="btn-nav" @onclick="NextPage" disabled="@(CurrentPage >= TotalPages)">Next →</button>
+        </div>
+    }
+
+    @if (ShowReplayConfirm)
+    {
+        <div class="modal-overlay" @onclick="CancelReplay">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h2>Replay Webhook</h2>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to replay this webhook event?</p>
+                    <div class="form-group">
+                        <label>Reason (optional)</label>
+                        <textarea class="form-control" @bind="ReplayReason" placeholder="Enter reason for replay..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" @onclick="CancelReplay">Cancel</button>
+                    <button class="btn-primary" @onclick="ConfirmReplay">Replay</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(ActionMessage))
+    {
+        <div class="@($"alert alert-{ActionMessageType}")">
+            @ActionMessage
+        </div>
+    }
+</div>
+
+@code {
+    private List<WebhookEventResponse> Webhooks = new();
+    private bool IsLoading = false;
+    private string SelectedProvider = string.Empty;
+    private string SelectedStatus = string.Empty;
+    private int CurrentPage = 1;
+    private int PageSize = 20;
+    private int TotalPages = 1;
+    private int TotalCount = 0;
+
+    private bool ShowReplayConfirm = false;
+    private Guid SelectedWebhookId = Guid.Empty;
+    private string ReplayReason = string.Empty;
+
+    private string ActionMessage = string.Empty;
+    private string ActionMessageType = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWebhooks();
+    }
+
+    private async Task LoadWebhooks()
+    {
+        try
+        {
+            IsLoading = true;
+            ActionMessage = string.Empty;
+
+            // Placeholder data
+            var allWebhooks = new List<WebhookEventResponse>
+            {
+                new WebhookEventResponse { WebhookEventId = Guid.NewGuid(), Provider = "MPesa", EventType = "PaymentCompleted", PaymentReference = "PAY-001", IsProcessed = true, ProcessingAttempts = 1, ReceivedAt = DateTime.UtcNow.AddHours(-3) },
+                new WebhookEventResponse { WebhookEventId = Guid.NewGuid(), Provider = "Card", EventType = "PaymentFailed", PaymentReference = "PAY-002", IsProcessed = false, ProcessingAttempts = 0, ReceivedAt = DateTime.UtcNow.AddHours(-2) },
+                new WebhookEventResponse { WebhookEventId = Guid.NewGuid(), Provider = "BankTransfer", EventType = "PaymentCompleted", PaymentReference = "PAY-003", IsProcessed = true, ProcessingAttempts = 1, ReceivedAt = DateTime.UtcNow.AddHours(-1) },
+                new WebhookEventResponse { WebhookEventId = Guid.NewGuid(), Provider = "MPesa", EventType = "PaymentCompleted", PaymentReference = "PAY-004", IsProcessed = false, ProcessingAttempts = 2, ProcessingError = "Timeout", ReceivedAt = DateTime.UtcNow.AddMinutes(-30) },
+                new WebhookEventResponse { WebhookEventId = Guid.NewGuid(), Provider = "Card", EventType = "PaymentCompleted", PaymentReference = "PAY-005", IsProcessed = true, ProcessingAttempts = 1, ReceivedAt = DateTime.UtcNow.AddMinutes(-15) },
+            };
+
+            TotalCount = allWebhooks.Count;
+            TotalPages = (int)Math.Ceiling((double)TotalCount / PageSize);
+
+            Webhooks = allWebhooks
+                .Skip((CurrentPage - 1) * PageSize)
+                .Take(PageSize)
+                .ToList();
+
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading webhooks");
+            ActionMessage = "Error loading webhooks";
+            ActionMessageType = "error";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void ViewWebhookDetails(Guid webhookEventId)
+    {
+        Logger.LogInformation("Viewing webhook details: {WebhookEventId}", webhookEventId);
+    }
+
+    private void ReplayWebhook(Guid webhookEventId)
+    {
+        SelectedWebhookId = webhookEventId;
+        ReplayReason = string.Empty;
+        ShowReplayConfirm = true;
+    }
+
+    private async Task ConfirmReplay()
+    {
+        try
+        {
+            // In production, call the API to replay the webhook
+            var webhook = Webhooks.FirstOrDefault(w => w.WebhookEventId == SelectedWebhookId);
+            if (webhook != null)
+            {
+                webhook.IsProcessed = false;
+                ActionMessage = $"Webhook {SelectedWebhookId.ToString("N").Substring(0, 8)} queued for replay";
+                ActionMessageType = "success";
+            }
+
+            ShowReplayConfirm = false;
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error replaying webhook");
+            ActionMessage = "Error replaying webhook";
+            ActionMessageType = "error";
+        }
+    }
+
+    private void CancelReplay()
+    {
+        ShowReplayConfirm = false;
+        ReplayReason = string.Empty;
+    }
+
+    private async Task NextPage()
+    {
+        if (CurrentPage < TotalPages)
+        {
+            CurrentPage++;
+            await LoadWebhooks();
+        }
+    }
+
+    private async Task PreviousPage()
+    {
+        if (CurrentPage > 1)
+        {
+            CurrentPage--;
+            await LoadWebhooks();
+        }
+    }
+}
+
+<style>
+    .page-container {
+        padding: 30px;
+        background: #f5f7fa;
+        min-height: 100vh;
+    }
+
+    .page-header {
+        margin-bottom: 30px;
+    }
+
+        .page-header h1 {
+            margin: 0;
+            font-size: 28px;
+            color: #1a1a1a;
+        }
+
+        .page-header p {
+            margin: 8px 0 0 0;
+            color: #666;
+        }
+
+    .filter-section {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+
+    .filter-select,
+    .btn-primary {
+        padding: 10px 14px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .filter-select {
+        flex: 1;
+        min-width: 150px;
+        background: white;
+    }
+
+    .btn-primary {
+        background: #0d47a1;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background 0.3s ease;
+    }
+
+        .btn-primary:hover {
+            background: #1565c0;
+        }
+
+    .loading,
+    .no-data {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+    }
+
+    .table-container {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        margin-bottom: 24px;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .data-table thead {
+            background: #f0f0f0;
+        }
+
+        .data-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #1a1a1a;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+
+        .data-table tbody tr:hover {
+            background: #f9f9f9;
+        }
+
+    .event-id {
+        font-family: monospace;
+        color: #666;
+        font-size: 12px;
+    }
+
+    .event-type {
+        background: #e3f2fd;
+        color: #0d47a1;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .payment-ref {
+        font-weight: 600;
+        color: #0d47a1;
+    }
+
+    .text-muted {
+        color: #999;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .badge-processed {
+        background: #c8e6c9;
+        color: #2e7d32;
+    }
+
+    .badge-pending {
+        background: #fff9c4;
+        color: #f57f17;
+    }
+
+    .badge-failed {
+        background: #ffcdd2;
+        color: #c62828;
+    }
+
+    .timestamp {
+        color: #999;
+        font-size: 12px;
+    }
+
+    .btn-small {
+        padding: 6px 12px;
+        background: #0d47a1;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        margin-right: 6px;
+        transition: background 0.3s ease;
+    }
+
+        .btn-small:hover {
+            background: #1565c0;
+        }
+
+    .btn-replay {
+        background: #f57f17;
+    }
+
+        .btn-replay:hover {
+            background: #f9a825;
+        }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 16px;
+        margin-top: 24px;
+    }
+
+    .btn-nav {
+        padding: 8px 16px;
+        background: #0d47a1;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.3s ease;
+    }
+
+        .btn-nav:hover:not(:disabled) {
+            background: #1565c0;
+        }
+
+        .btn-nav:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+    .page-info {
+        color: #666;
+        font-size: 14px;
+    }
+
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        max-width: 400px;
+        width: 90%;
+    }
+
+    .modal-header {
+        padding: 20px;
+        border-bottom: 1px solid #eee;
+    }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: #1a1a1a;
+        }
+
+    .modal-body {
+        padding: 20px;
+    }
+
+        .modal-body p {
+            margin: 0 0 16px 0;
+            color: #666;
+        }
+
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #1a1a1a;
+            font-size: 14px;
+        }
+
+    .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: inherit;
+        box-sizing: border-box;
+        resize: vertical;
+        min-height: 80px;
+    }
+
+    .modal-footer {
+        padding: 20px;
+        border-top: 1px solid #eee;
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+    }
+
+    .btn-secondary {
+        padding: 10px 16px;
+        background: #e0e0e0;
+        color: #1a1a1a;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: background 0.3s ease;
+    }
+
+        .btn-secondary:hover {
+            background: #d0d0d0;
+        }
+
+    .alert {
+        margin-top: 24px;
+        padding: 12px 16px;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .alert-success {
+        background: #c8e6c9;
+        color: #2e7d32;
+        border: 1px solid #81c784;
+    }
+
+    .alert-error {
+        background: #ffcdd2;
+        color: #c62828;
+        border: 1px solid #ef5350;
+    }
+</style>

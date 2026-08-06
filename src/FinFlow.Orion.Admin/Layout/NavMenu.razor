@@ -1,39 +1,50 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">FinFlow.Orion.Admin</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
+﻿@inject NavigationManager Navigation
+
+<nav class="navbar">
+    <div class="navbar-brand">
+        <span class="brand-text">FinFlow.Orion</span>
     </div>
-</div>
 
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+    <ul class="nav-menu">
+        <li class="nav-item">
+            <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                <span class="icon">📊</span>
+                <span>Dashboard</span>
             </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+        </li>
+
+        <li class="nav-item">
+            <NavLink class="nav-link" href="/payments" Match="NavLinkMatch.Prefix">
+                <span class="icon">💳</span>
+                <span>Payments</span>
             </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+        </li>
+
+        <li class="nav-item">
+            <NavLink class="nav-link" href="/reconciliation" Match="NavLinkMatch.Prefix">
+                <span class="icon">🔄</span>
+                <span>Reconciliation</span>
             </NavLink>
-        </div>
-    </nav>
-</div>
+        </li>
 
-@code {
-    private bool collapseNavMenu = true;
+        <li class="nav-item">
+            <NavLink class="nav-link" href="/discrepancies" Match="NavLinkMatch.Prefix">
+                <span class="icon">⚠️</span>
+                <span>Discrepancies</span>
+            </NavLink>
+        </li>
 
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+        <li class="nav-item">
+            <NavLink class="nav-link" href="/webhooks" Match="NavLinkMatch.Prefix">
+                <span class="icon">🔗</span>
+                <span>Webhooks</span>
+            </NavLink>
+        </li>
+    </ul>
 
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
-    }
-}
+    <div class="navbar-footer">
+        <a href="https://github.com/mburu1" target="_blank" rel="noopener noreferrer">
+            GitHub
+        </a>
+    </div>
+</nav>
