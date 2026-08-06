@@ -1,23 +1,41 @@
-var builder = WebApplication.CreateBuilder(args);
+using FinFlow.Orion.Api.Extensions;
+using Serilog;
 
-// Add services to the container.
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
-
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+try
 {
-    app.MapOpenApi();
+    Log.Information("[FinFlow.Orion] Starting up...");
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    // ── Serilog ───────────────────────────────────────────────────────────────
+    builder.Host.UseSerilog((context, services, configuration) =>
+        configuration
+            .ReadFrom.Configuration(context.Configuration)
+            .ReadFrom.Services(services)
+            .Enrich.FromLogContext()
+            .WriteTo.Console());
+
+    // ── Services ──────────────────────────────────────────────────────────────
+    builder.Services.AddApiServices(builder.Configuration);
+
+    var app = builder.Build();
+
+    // ── Middleware pipeline ───────────────────────────────────────────────────
+    app.UseApiMiddleware();
+
+    Log.Information("[FinFlow.Orion] Running on {Urls}", string.Join(", ", builder.WebHost.GetSetting("urls") ?? "default"));
+
+    await app.RunAsync();
 }
-
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
+catch (Exception ex)
+{
+    Log.Fatal(ex, "[FinFlow.Orion] Application terminated unexpectedly.");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
