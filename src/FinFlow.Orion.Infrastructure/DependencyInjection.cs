@@ -1,4 +1,5 @@
 using FinFlow.Orion.Application.Common.Interfaces;
+using FinFlow.Orion.Infrastructure.Auth;
 using FinFlow.Orion.Infrastructure.Idempotency;
 using FinFlow.Orion.Infrastructure.Jobs;
 using FinFlow.Orion.Infrastructure.Persistence; // For UnitOfWork, ApplicationDbContext, LedgerDbContext
@@ -11,6 +12,7 @@ using FinFlow.Orion.Infrastructure.Services;
 using FinFlow.Orion.Infrastructure.Webhooks;
 using FinFlow.Orion.Ledger.Abstractions;
 using FinFlow.Orion.Ledger.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,6 +51,12 @@ namespace FinFlow.Orion.Infrastructure
             services.AddScoped<IReconciliationRepository, ReconciliationRepository>();
             services.AddScoped<IWebhookRepository, WebhookRepository>();
             services.AddScoped<IOutboxService, OutboxService>();
+            // Inside AddInfrastructure method:
+            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IUserService, UserService>();
+            services.AddScoped<FinFlow.Orion.Application.Common.Interfaces.IPasswordHasher, PasswordHasher>();
+            services.AddScoped<ITokenService, JwtTokenService>();
+            services.Configure<JwtConfiguration>(configuration.GetSection(JwtConfiguration.SectionName));
 
             // ── Providers ─────────────────────────────────────────────────────────
             services.Configure<MpesaConfiguration>(configuration.GetSection(MpesaConfiguration.SectionName));

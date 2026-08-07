@@ -2,6 +2,7 @@ using FinFlow.Orion.Domain.Entities.Ledger;
 using FinFlow.Orion.Domain.Entities.Payments;
 using FinFlow.Orion.Domain.Entities.Reconciliation;
 using FinFlow.Orion.Domain.Entities.Webhooks;
+using FinFlow.Orion.Domain.Entities.Identity; // Add this
 using FinFlow.Orion.Domain.Primitives;
 using FinFlow.Orion.Infrastructure.Persistence.Configurations;
 using FinFlow.Orion.Infrastructure.Idempotency;
@@ -21,6 +22,10 @@ public sealed class ApplicationDbContext : DbContext
     {
         _mediator = mediator;
     }
+
+    // ── Identity ──────────────────────────────────────────────────────────────
+    public DbSet<AppUser> Users => Set<AppUser>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     // ── Payments ─────────────────────────────────────────────────────────────
     public DbSet<Payment> Payments => Set<Payment>();
