@@ -6,9 +6,17 @@ using FinFlow.Orion.Workers.Jobs;
 using FinFlow.Orion.Workers.Services;
 using Quartz;
 using Serilog;
+using Serilog.Formatting.Compact;
 
+// ── Bootstrap logger (captures startup failures before appsettings loads) ────
 Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
+    .MinimumLevel.Verbose()
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: "logs/workers-bootstrap-.log",
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 7,
+        formatter: new CompactJsonFormatter())
     .CreateBootstrapLogger();
 
 try
@@ -23,7 +31,9 @@ try
             .ReadFrom.Configuration(builder.Configuration)
             .ReadFrom.Services(services)
             .Enrich.FromLogContext()
-            .WriteTo.Console());
+            .Enrich.WithMachineName()
+            .Enrich.WithThreadId()
+            .Enrich.WithProperty("Application", "FinFlow.Orion.Workers"));
 
     // ── Application + Infrastructure + Ledger ─────────────────────────────────
     builder.Services.AddApplication();
@@ -47,9 +57,12 @@ try
     builder.Services.AddHostedService<JobSchedulerHostedService>();
 
     var host = builder.Build();
+
+    Log.Information("[FinFlow.Orion.Workers] Host built successfully. Starting workers...");
+
     await host.RunAsync();
 }
-catch (Exception ex)
+catch (Exception ex) when (ex is not HostAbortedException)
 {
     Log.Fatal(ex, "[FinFlow.Orion.Workers] Terminated unexpectedly.");
 }
@@ -75,15 +88,18 @@ public sealed class JobSchedulerHostedService : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        _logger.LogInformation("[JobSchedulerHostedService] Scheduling all jobs...");
+
         using var scope = _serviceProvider.CreateScope();
         var scheduler = scope.ServiceProvider.GetRequiredService<JobScheduler>();
         await scheduler.ScheduleAllJobsAsync(cancellationToken);
-        _logger.LogInformation("[JobSchedulerHostedService] All jobs registered.");
+
+        _logger.LogInformation("[JobSchedulerHostedService] All jobs registered successfully.");
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("[JobSchedulerHostedService] Shutting down.");
+        _logger.LogInformation("[JobSchedulerHostedService] Shutting down gracefully.");
         return Task.CompletedTask;
     }
 }

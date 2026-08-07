@@ -7,15 +7,22 @@ namespace FinFlow.Orion.Admin.Services;
 
 public interface IPaymentService
 {
-    // Payments
-    Task<PaymentDto?> GetPaymentByIdAsync(Guid paymentId, CancellationToken cancellationToken = default);
-    Task<PagedResponse<PaymentSummaryDto>?> GetPaymentsByCustomerAsync(
+    // ── Payments ──────────────────────────────────────────────────────────────
+
+    // ✅ PaymentDto → PaymentStatusResponse
+    Task<PaymentStatusResponse?> GetPaymentByIdAsync(
+        Guid paymentId,
+        CancellationToken cancellationToken = default);
+
+    // ✅ PaymentSummaryDto → PaymentSummaryResponse
+    Task<PagedResponse<PaymentSummaryResponse>?> GetPaymentsByCustomerAsync(
         string customerId,
         int page = 1,
         int pageSize = 20,
         CancellationToken cancellationToken = default);
 
-    // Reconciliation
+    // ── Reconciliation ────────────────────────────────────────────────────────
+
     Task<Guid> TriggerReconciliationAsync(
         string provider,
         DateOnly reconDate,
@@ -38,7 +45,8 @@ public interface IPaymentService
         string notes,
         CancellationToken cancellationToken = default);
 
-    // Webhooks
+    // ── Webhooks ──────────────────────────────────────────────────────────────
+
     Task<PagedResponse<WebhookEventResponse>?> GetWebhookEventsAsync(
         string? provider = null,
         bool? processed = null,

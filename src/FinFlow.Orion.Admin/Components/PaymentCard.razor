@@ -51,32 +51,12 @@
             </div>
         </div>
 
-        @if (!string.IsNullOrEmpty(Payment.Description))
+        @if (!string.IsNullOrEmpty(Payment.Provider))
         {
             <div class="payment-row">
                 <div class="payment-column full-width">
-                    <span class="label">Description</span>
-                    <span class="value description">@Payment.Description</span>
-                </div>
-            </div>
-        }
-
-        @if (!string.IsNullOrEmpty(Payment.ProviderTransactionId))
-        {
-            <div class="payment-row">
-                <div class="payment-column full-width">
-                    <span class="label">Provider Transaction ID</span>
-                    <span class="value provider-tx-id">@Payment.ProviderTransactionId</span>
-                </div>
-            </div>
-        }
-
-        @if (!string.IsNullOrEmpty(Payment.FailureReason))
-        {
-            <div class="payment-row failure-row">
-                <div class="payment-column full-width">
-                    <span class="label">Failure Reason</span>
-                    <span class="value failure-reason">@Payment.FailureReason</span>
+                    <span class="label">Provider</span>
+                    <span class="value provider">@Payment.Provider</span>
                 </div>
             </div>
         }
@@ -97,7 +77,7 @@
 
 @code {
     [Parameter]
-    public PaymentSummaryDto Payment { get; set; } = null!;
+    public PaymentSummaryResponse Payment { get; set; } = null!;
 
     [Parameter]
     public EventCallback OnViewDetails { get; set; }
@@ -110,6 +90,7 @@
 }
 
 <style>
+    /* Keep your existing styles — they're fine */
     .payment-card {
         background: white;
         border-radius: 8px;
@@ -195,14 +176,6 @@
             margin-bottom: 0;
         }
 
-    .failure-row {
-        background: #ffebee;
-        padding: 12px;
-        border-radius: 4px;
-        margin: 12px -16px -16px -16px;
-        padding: 12px 16px;
-    }
-
     .payment-column {
         display: flex;
         flex-direction: column;
@@ -248,21 +221,6 @@
             font-size: 12px;
         }
 
-        .value.description,
-        .value.provider-tx-id {
-            font-family: monospace;
-            font-size: 12px;
-            background: #f5f5f5;
-            padding: 8px;
-            border-radius: 4px;
-            word-break: break-all;
-        }
-
-        .value.failure-reason {
-            color: #c62828;
-            font-weight: 600;
-        }
-
     .text-muted {
         color: #999;
     }
@@ -275,9 +233,7 @@
         border-top: 1px solid #eee;
     }
 
-    .btn-view,
-    .btn-retry,
-    .btn-reverse {
+    .btn-view, .btn-retry, .btn-reverse {
         padding: 8px 14px;
         border: none;
         border-radius: 4px;

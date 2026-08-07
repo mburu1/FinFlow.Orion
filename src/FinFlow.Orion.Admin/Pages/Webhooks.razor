@@ -31,7 +31,7 @@
     {
         <div class="loading">Loading webhook events...</div>
     }
-    else if (Webhooks.Count == 0)
+    else if (WebhookEvents.Count == 0)
     {
         <div class="no-data">No webhook events found</div>
     }
@@ -51,7 +51,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var webhook in Webhooks)
+                    @foreach (var webhook in WebhookEvents)
                     {
                         <tr class="@($"status-{webhook.IsProcessed.ToString().ToLower()}")">
                             <td class="event-id">@webhook.WebhookEventId.ToString("N").Substring(0, 8)...</td>
@@ -126,7 +126,7 @@
 </div>
 
 @code {
-    private List<WebhookEventResponse> Webhooks = new();
+    private List<WebhookEventResponse> WebhookEvents = new();
     private bool IsLoading = false;
     private string SelectedProvider = string.Empty;
     private string SelectedStatus = string.Empty;
@@ -141,6 +141,8 @@
 
     private string ActionMessage = string.Empty;
     private string ActionMessageType = string.Empty;
+
+    private HashSet<Guid> ReplayedWebhookIds = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -167,7 +169,7 @@
             TotalCount = allWebhooks.Count;
             TotalPages = (int)Math.Ceiling((double)TotalCount / PageSize);
 
-            Webhooks = allWebhooks
+            WebhookEvents = allWebhooks
                 .Skip((CurrentPage - 1) * PageSize)
                 .Take(PageSize)
                 .ToList();
@@ -202,11 +204,26 @@
     {
         try
         {
-            // In production, call the API to replay the webhook
-            var webhook = Webhooks.FirstOrDefault(w => w.WebhookEventId == SelectedWebhookId);
-            if (webhook != null)
+            var index = WebhookEvents.FindIndex(w => w.WebhookEventId == SelectedWebhookId);
+            if (index >= 0)
             {
-                webhook.IsProcessed = false;
+                var old = WebhookEvents[index];
+                var updated = new WebhookEventResponse
+                {
+                    WebhookEventId = old.WebhookEventId,
+                    Provider = old.Provider,
+                    EventType = old.EventType,
+                    PaymentReference = old.PaymentReference,
+                    ProviderTransactionId = old.ProviderTransactionId,
+                    IsProcessed = false,               // init-only can be set here
+                    IsReplayed = old.IsReplayed,
+                    ProcessingAttempts = old.ProcessingAttempts,
+                    ProcessingError = old.ProcessingError,
+                    ReceivedAt = old.ReceivedAt,
+                    ProcessedAt = old.ProcessedAt
+                };
+
+                WebhookEvents[index] = updated;
                 ActionMessage = $"Webhook {SelectedWebhookId.ToString("N").Substring(0, 8)} queued for replay";
                 ActionMessageType = "success";
             }
@@ -245,6 +262,9 @@
             await LoadWebhooks();
         }
     }
+
+    private bool IsEffectivelyProcessed(WebhookEventResponse w) =>
+        w.IsProcessed || !ReplayedWebhookIds.Contains(w.WebhookEventId); // adjust logic to match desired UI
 }
 
 <style>

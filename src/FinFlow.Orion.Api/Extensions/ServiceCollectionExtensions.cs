@@ -4,12 +4,10 @@ using FinFlow.Orion.Application;
 using FinFlow.Orion.Infrastructure;
 using FinFlow.Orion.Ledger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;               // OpenAPI.NET v2: Models/Models.Security namespaces are gone,
-                                       // everything (OpenApiInfo, OpenApiSecurityScheme, OpenApiSchema,
-                                       // OpenApiOperation, JsonSchemaType, ParameterLocation, ...) lives here.
+using Microsoft.OpenApi;
 using MongoDB.Driver;
-using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Text;
 
 namespace FinFlow.Orion.Api.Extensions;
@@ -42,43 +40,30 @@ public static class ServiceCollectionExtensions
             options.SubstituteApiVersionInUrl = true;
         });
 
-        // ── Swagger / OpenAPI ─────────────────────────────────────────────────
-        services.AddEndpointsApiExplorer();
-        services.AddSwaggerGen(options =>
+        // ── Native .NET 10 OpenAPI (no Swashbuckle) ───────────────────────────
+        services.AddOpenApi(options =>
         {
-            options.SwaggerDoc("v1", new OpenApiInfo
+            options.AddDocumentTransformer((document, context, cancellationToken) =>
             {
-                Title = "FinFlow.Orion API",
-                Version = "v1",
-                Description = "Payment Orchestration & Reconciliation Engine",
-                Contact = new OpenApiContact
+                document.Info = new()
                 {
-                    Name = "Mwangi Wa Mburu",
-                    Url = new Uri("https://github.com/mburu1")
-                }
+                    Title = "FinFlow.Orion API",
+                    Version = "v1",
+                    Description = "Payment Orchestration & Reconciliation Engine",
+                    Contact = new()
+                    {
+                        Name = "Mwangi Wa Mburu",
+                        Url = new Uri("https://github.com/mburu1")
+                    }
+                };
+                return Task.CompletedTask;
             });
 
-            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-            {
-                Name = "Authorization",
-                Type = SecuritySchemeType.Http,
-                Scheme = "bearer",
-                BearerFormat = "JWT",
-                In = ParameterLocation.Header,
-                Description = "Enter your JWT token."
-            });
+            // ── JWT Bearer security scheme ─────────────────────────────────────
+            options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
 
-            // FIX: OpenApiSecurityScheme.Reference was removed in OpenAPI.NET v2.
-            // AddSecurityRequirement now takes a Func<OpenApiDocument, OpenApiSecurityRequirement>
-            // so the reference can be built against the document currently being generated.
-            // The scheme id string ("Bearer") passed to OpenApiSecuritySchemeReference must match
-            // the AddSecurityDefinition id exactly, including case.
-            options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
-            {
-                [new OpenApiSecuritySchemeReference("Bearer", document)] = []
-            });
-
-            options.OperationFilter<IdempotencyKeyOperationFilter>();
+            // ── Idempotency-Key header on mutating operations ──────────────────
+            options.AddOperationTransformer<IdempotencyKeyOperationTransformer>();
         });
 
         // ── Authentication ────────────────────────────────────────────────────
@@ -121,10 +106,6 @@ public static class ServiceCollectionExtensions
         services.AddLedger();
 
         // ── MongoDB client ────────────────────────────────────────────────────
-        // AspNetCore.HealthChecks.MongoDb v9 no longer accepts a connection string
-        // and no longer caches clients internally — it resolves IMongoClient from DI.
-        // MongoClient is documented as safe/intended to be a singleton (it owns the
-        // connection pool), so register it once here rather than per health-check call.
         services.AddSingleton<IMongoClient>(_ =>
             new MongoClient(
                 configuration["MongoDB:ConnectionString"]
@@ -135,21 +116,58 @@ public static class ServiceCollectionExtensions
         services.AddHealthChecks()
             .AddSqlServer(
                 connectionString: configuration.GetConnectionString("DefaultConnection")!)
-            .AddMongoDb(); // resolves the IMongoClient singleton registered above
+            .AddMongoDb();
 
         return services;
     }
 }
 
-// ── Swagger Operation Filter — Idempotency-Key header ────────────────────────
+// ── Bearer security scheme transformer ───────────────────────────────────────
 
-public sealed class IdempotencyKeyOperationFilter : IOperationFilter
+public sealed class BearerSecuritySchemeTransformer : IOpenApiDocumentTransformer
 {
-    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    public Task TransformAsync(
+        OpenApiDocument document,
+        OpenApiDocumentTransformerContext context,
+        CancellationToken cancellationToken)
     {
-        var httpMethod = context.ApiDescription.HttpMethod?.ToUpper();
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+
+        document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "Enter your JWT token."
+        };
+
+        // Apply globally to all operations.
+        // OpenAPI.NET v2 dropped OpenApiSecurityScheme.Reference / OpenApiReference in
+        // favor of dedicated *Reference types, and OpenApiDocument.SecurityRequirements
+        // was renamed to OpenApiDocument.Security.
+        document.Security ??= [];
+        document.Security.Add(new OpenApiSecurityRequirement
+        {
+            [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+        });
+
+        return Task.CompletedTask;
+    }
+}
+
+// ── Idempotency-Key operation transformer ─────────────────────────────────────
+
+public sealed class IdempotencyKeyOperationTransformer : IOpenApiOperationTransformer
+{
+    public Task TransformAsync(
+        OpenApiOperation operation,
+        OpenApiOperationTransformerContext context,
+        CancellationToken cancellationToken)
+    {
+        var httpMethod = context.Description.HttpMethod?.ToUpper();
         if (httpMethod is not ("POST" or "PATCH" or "DELETE"))
-            return;
+            return Task.CompletedTask;
 
         operation.Parameters ??= [];
 
@@ -161,9 +179,12 @@ public sealed class IdempotencyKeyOperationFilter : IOperationFilter
             Description = "Unique key to ensure idempotent requests. Min 16 characters.",
             Schema = new OpenApiSchema
             {
+                // OpenApiSchema.Type is now the JsonSchemaType flags enum, not a string.
                 Type = JsonSchemaType.String,
                 MinLength = 16
             }
         });
+
+        return Task.CompletedTask;
     }
 }

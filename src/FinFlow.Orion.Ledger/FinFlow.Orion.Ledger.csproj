@@ -1,6 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FinFlow.Orion.Domain\FinFlow.Orion.Domain.csproj" />
     <ProjectReference Include="..\FinFlow.Orion.Contracts\FinFlow.Orion.Contracts.csproj" />
   </ItemGroup>

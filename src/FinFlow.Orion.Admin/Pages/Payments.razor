@@ -31,7 +31,7 @@
     {
         <div class="loading">Loading payments...</div>
     }
-    else if (Payments.Count == 0)
+    else if (!PaymentList.Any())
     {
         <div class="no-data">No payments found</div>
     }
@@ -43,19 +43,23 @@
                     <tr>
                         <th>Reference</th>
                         <th>Amount</th>
+                        <th>Currency</th>
                         <th>Provider</th>
+                        <th>Channel</th>
                         <th>Status</th>
                         <th>Created</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var payment in Payments)
+                    @foreach (var payment in PaymentList)
                     {
                         <tr class="@($"status-{payment.Status?.ToLower()}")">
                             <td class="ref-cell">@payment.Reference</td>
                             <td class="amount-cell">@payment.Amount.ToString("C")</td>
+                            <td>@payment.CurrencyCode</td>
                             <td>@payment.Provider</td>
+                            <td>@payment.Channel</td>
                             <td>
                                 <span class="@($"badge badge-{payment.Status?.ToLower()}")">
                                     @payment.Status
@@ -63,7 +67,10 @@
                             </td>
                             <td>@payment.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
                             <td>
-                                <button class="btn-small" @onclick="@(() => ViewPaymentDetails(payment.PaymentId))">View</button>
+                                <button class="btn-small"
+                                        @onclick="@(() => ViewPaymentDetails(payment.PaymentId))">
+                                    View
+                                </button>
                             </td>
                         </tr>
                     }
@@ -71,13 +78,20 @@
             </table>
         </div>
     }
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="error-message">@ErrorMessage</div>
+    }
 </div>
 
 @code {
-    private List<PaymentSummaryDto> Payments = new();
+    // ✅ Fixed CS0542: renamed from 'Payments' to 'PaymentList'
+    private List<PaymentSummaryResponse> PaymentList = new();
     private bool IsLoading = false;
     private string SearchTerm = string.Empty;
     private string SelectedStatus = string.Empty;
+    private string ErrorMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -89,28 +103,83 @@
         try
         {
             IsLoading = true;
-            // Placeholder data
-            Payments = new List<PaymentSummaryDto>
+            ErrorMessage = string.Empty;
+            StateHasChanged();
+
+            // TODO: Replace with real API call via IPaymentService
+            // e.g. PaymentList = await PaymentService.GetPaymentsAsync(SelectedStatus, SearchTerm);
+
+            // ✅ Fixed: PaymentSummaryDto → PaymentSummaryResponse
+            PaymentList = new List<PaymentSummaryResponse>
             {
-                new PaymentSummaryDto { PaymentId = Guid.NewGuid(), Reference = "PAY-001", Amount = 5000, CurrencyCode = "KES", Status = "Captured", Provider = "MPesa", CreatedAt = DateTime.UtcNow.AddHours(-2) },
-                new PaymentSummaryDto { PaymentId = Guid.NewGuid(), Reference = "PAY-002", Amount = 15000, CurrencyCode = "KES", Status = "Pending", Provider = "Card", CreatedAt = DateTime.UtcNow.AddHours(-1) },
-                new PaymentSummaryDto { PaymentId = Guid.NewGuid(), Reference = "PAY-003", Amount = 8500, CurrencyCode = "KES", Status = "Failed", Provider = "BankTransfer", CreatedAt = DateTime.UtcNow.AddMinutes(-30) },
+                new PaymentSummaryResponse
+                {
+                    PaymentId   = Guid.NewGuid(),
+                    Reference   = "PAY-001",
+                    Amount      = 5000,
+                    CurrencyCode = "KES",
+                    Status      = "Captured",
+                    Provider    = "MPesa",
+                    Channel     = "Mobile",
+                    CreatedAt   = DateTime.UtcNow.AddHours(-2)
+                },
+                new PaymentSummaryResponse
+                {
+                    PaymentId   = Guid.NewGuid(),
+                    Reference   = "PAY-002",
+                    Amount      = 15000,
+                    CurrencyCode = "KES",
+                    Status      = "Pending",
+                    Provider    = "Card",
+                    Channel     = "Web",
+                    CreatedAt   = DateTime.UtcNow.AddHours(-1)
+                },
+                new PaymentSummaryResponse
+                {
+                    PaymentId   = Guid.NewGuid(),
+                    Reference   = "PAY-003",
+                    Amount      = 8500,
+                    CurrencyCode = "KES",
+                    Status      = "Failed",
+                    Provider    = "BankTransfer",
+                    Channel     = "API",
+                    CreatedAt   = DateTime.UtcNow.AddMinutes(-30)
+                }
             };
-            await Task.CompletedTask;
+
+            // Apply filters client-side
+            if (!string.IsNullOrEmpty(SelectedStatus))
+            {
+                PaymentList = PaymentList
+                    .Where(p => p.Status == SelectedStatus)
+                    .ToList();
+            }
+
+            if (!string.IsNullOrEmpty(SearchTerm))
+            {
+                PaymentList = PaymentList
+                    .Where(p => p.Reference.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)
+                             || p.PaymentId.ToString().Contains(SearchTerm, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
         }
         catch (Exception ex)
         {
+            ErrorMessage = $"Failed to load payments: {ex.Message}";
             Logger.LogError(ex, "Error loading payments");
         }
         finally
         {
             IsLoading = false;
+            StateHasChanged();
         }
     }
 
     private void ViewPaymentDetails(Guid paymentId)
     {
         Logger.LogInformation("Viewing payment details: {PaymentId}", paymentId);
+        // TODO: Navigate to payment detail page
+        // NavigationManager.NavigateTo($"/payments/{paymentId}");
     }
 }
 
@@ -177,6 +246,10 @@
         padding: 6px 12px;
         font-size: 12px;
     }
+
+        .btn-small:hover {
+            background: #1565c0;
+        }
 
     .loading,
     .no-data {
@@ -254,5 +327,15 @@
     .badge-reversed {
         background: #e1bee7;
         color: #6a1b9a;
+    }
+
+    .error-message {
+        margin-top: 16px;
+        padding: 12px 16px;
+        background: #ffebee;
+        color: #c62828;
+        border-radius: 4px;
+        border-left: 4px solid #c62828;
+        font-size: 14px;
     }
 </style>

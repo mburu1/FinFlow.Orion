@@ -17,7 +17,8 @@
             <option value="Missing">Missing</option>
         </select>
 
-        <select class="filter-select" @onchange="@((ChangeEventArgs e) => ShowResolved = e.Value?.ToString() ?? "false" == "true")">
+        @* ✅ Fixed: was using ?? operator incorrectly on bool assignment *@
+        <select class="filter-select" @onchange="@((ChangeEventArgs e) => ShowResolved = e.Value?.ToString() == "true")">
             <option value="false">Unresolved Only</option>
             <option value="true">All</option>
         </select>
@@ -29,26 +30,28 @@
     {
         <div class="loading">Loading discrepancies...</div>
     }
-    else if (Discrepancies.Count == 0)
+    else if (!DiscrepancyList.Any())
     {
         <div class="no-data">No discrepancies found</div>
     }
     else
     {
         <div class="discrepancies-list">
-            @foreach (var disc in Discrepancies)
+            @foreach (var disc in DiscrepancyList)
             {
                 <div class="@($"discrepancy-card {(disc.IsResolved ? "resolved" : "unresolved")}")">
-                    <div class="card-header">
+                    <div class="disc-card-header">
                         <span class="payment-ref">@disc.PaymentReference</span>
-                        <span class="@($"badge badge-{disc.DiscrepancyType?.ToLower()}")">@disc.DiscrepancyType</span>
+                        <span class="@($"badge badge-{disc.DiscrepancyType?.ToLower()}")">
+                            @disc.DiscrepancyType
+                        </span>
                         @if (disc.IsResolved)
                         {
                             <span class="badge-resolved">✓ Resolved</span>
                         }
                     </div>
 
-                    <div class="card-body">
+                    <div class="disc-card-body">
                         <div class="discrepancy-detail">
                             <span class="label">Internal Amount:</span>
                             <span class="value">@disc.InternalAmount.ToString("C")</span>
@@ -72,8 +75,10 @@
 
                     @if (!disc.IsResolved)
                     {
-                        <div class="card-footer">
-                            <button class="btn-resolve" @onclick="@(() => ResolveDiscrepancy(disc.DiscrepancyId))">
+                        <div class="disc-card-footer">
+                            @* ✅ Fixed: ResolveDiscrepancy method now defined below *@
+                            <button class="btn-resolve"
+                                    @onclick="@(() => ResolveDiscrepancyAsync(disc.DiscrepancyId))">
                                 Mark as Resolved
                             </button>
                         </div>
@@ -82,13 +87,21 @@
             }
         </div>
     }
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="error-message">@ErrorMessage</div>
+    }
 </div>
 
 @code {
-    private List<DiscrepancyResponse> Discrepancies = new();
+    // ✅ Fixed: renamed from 'Discrepancies' to 'DiscrepancyList'
+    // to avoid CS0542 (member name same as enclosing type)
+    private List<DiscrepancyResponse> DiscrepancyList = new();
     private bool IsLoading = false;
     private string SelectedType = string.Empty;
     private bool ShowResolved = false;
+    private string ErrorMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -100,9 +113,307 @@
         try
         {
             IsLoading = true;
+            ErrorMessage = string.Empty;
+            StateHasChanged();
 
-            // Placeholder data
-            Discrepancies = new List<DiscrepancyResponse>
+            // TODO: Replace with real API call via IReconciliationService
+            // e.g. DiscrepancyList = await ReconciliationService.GetDiscrepanciesAsync(SelectedType, ShowResolved);
+
+            DiscrepancyList = new List<DiscrepancyResponse>
             {
-                new DiscrepancyResponse { DiscrepancyId = Guid.NewGuid(), PaymentReference = "PAY-001", DiscrepancyType = "AmountMismatch", InternalAmount = 5000, ProviderAmount = 4950, DifferenceAmount = 50, CurrencyCode = "KES", IsResolved = false, DetectedAt = DateTime.UtcNow.AddHours(-5) },
-                new Discrepanc
+                new DiscrepancyResponse
+                {
+                    DiscrepancyId   = Guid.NewGuid(),
+                    PaymentReference = "PAY-001",
+                    DiscrepancyType  = "AmountMismatch",
+                    InternalAmount   = 5000,
+                    ProviderAmount   = 4950,
+                    DifferenceAmount = 50,
+                    CurrencyCode     = "KES",
+                    IsResolved       = false,
+                    DetectedAt       = DateTime.UtcNow.AddHours(-5)
+                },
+                new DiscrepancyResponse
+                {
+                    DiscrepancyId   = Guid.NewGuid(),
+                    PaymentReference = "PAY-002",
+                    DiscrepancyType  = "StatusMismatch",
+                    InternalAmount   = 12000,
+                    ProviderAmount   = 12000,
+                    DifferenceAmount = 0,
+                    CurrencyCode     = "KES",
+                    IsResolved       = true,
+                    DetectedAt       = DateTime.UtcNow.AddHours(-12)
+                }
+            };
+
+            // Apply filters
+            if (!string.IsNullOrEmpty(SelectedType))
+            {
+                DiscrepancyList = DiscrepancyList
+                    .Where(d => d.DiscrepancyType == SelectedType)
+                    .ToList();
+            }
+
+            if (!ShowResolved)
+            {
+                DiscrepancyList = DiscrepancyList
+                    .Where(d => !d.IsResolved)
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load discrepancies: {ex.Message}";
+            Logger.LogError(ex, "Error loading discrepancies");
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ✅ Fixed: ResolveDiscrepancy method now exists
+    private async Task ResolveDiscrepancyAsync(Guid discrepancyId)
+    {
+        try
+        {
+            Logger.LogInformation("Resolving discrepancy {Id}", discrepancyId);
+
+            // TODO: Replace with real API call via IReconciliationService
+            // e.g. await ReconciliationService.ResolveDiscrepancyAsync(discrepancyId);
+
+            var index = DiscrepancyList.FindIndex(d => d.DiscrepancyId == discrepancyId);
+            if (index >= 0)
+            {
+                var old = DiscrepancyList[index];
+                var updated = new DiscrepancyResponse
+                {
+                    DiscrepancyId   = old.DiscrepancyId,
+                    ReportId        = old.ReportId,
+                    PaymentReference= old.PaymentReference,
+                    DiscrepancyType = old.DiscrepancyType,
+                    InternalAmount  = old.InternalAmount,
+                    ProviderAmount  = old.ProviderAmount,
+                    DifferenceAmount= old.DifferenceAmount,
+                    CurrencyCode    = old.CurrencyCode,
+                    IsResolved      = true,
+                    ResolvedBy      = old.ResolvedBy,
+                    ResolvedAt      = DateTime.UtcNow,
+                    Notes           = old.Notes,
+                    DetectedAt      = old.DetectedAt
+                };
+
+                DiscrepancyList[index] = updated;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to resolve discrepancy: {ex.Message}";
+            Logger.LogError(ex, "Error resolving discrepancy {Id}", discrepancyId);
+        }
+    }
+}
+
+<style>
+    .page-container {
+        padding: 24px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .page-header {
+        margin-bottom: 24px;
+    }
+
+        .page-header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #0d47a1;
+            margin: 0 0 8px 0;
+        }
+
+        .page-header p {
+            color: #666;
+            margin: 0;
+        }
+
+    .filter-section {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .filter-select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        color: #333;
+        background: white;
+        min-width: 160px;
+    }
+
+    .btn-primary {
+        padding: 8px 16px;
+        background: #0d47a1;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+        .btn-primary:hover {
+            background: #1565c0;
+        }
+
+    .loading,
+    .no-data {
+        text-align: center;
+        padding: 48px;
+        color: #999;
+        font-size: 16px;
+    }
+
+    .discrepancies-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .discrepancy-card {
+        background: white;
+        border-radius: 8px;
+        border-left: 4px solid #ddd;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+        .discrepancy-card.unresolved {
+            border-left-color: #c62828;
+        }
+
+        .discrepancy-card.resolved {
+            border-left-color: #2e7d32;
+            opacity: 0.8;
+        }
+
+    .disc-card-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px;
+        background: #f9f9f9;
+        border-bottom: 1px solid #eee;
+        flex-wrap: wrap;
+    }
+
+    .payment-ref {
+        font-weight: 700;
+        color: #0d47a1;
+        font-size: 15px;
+    }
+
+    .badge {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .badge-amountmismatch {
+        background: #fff9c4;
+        color: #f57f17;
+    }
+
+    .badge-statusmismatch {
+        background: #e3f2fd;
+        color: #0d47a1;
+    }
+
+    .badge-missing {
+        background: #ffcdd2;
+        color: #c62828;
+    }
+
+    .badge-resolved {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        background: #c8e6c9;
+        color: #2e7d32;
+    }
+
+    .disc-card-body {
+        padding: 16px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+    }
+
+    .discrepancy-detail {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .label {
+        font-size: 12px;
+        color: #999;
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    .value {
+        font-size: 14px;
+        color: #1a1a1a;
+        font-weight: 500;
+    }
+
+        .value.difference {
+            color: #c62828;
+            font-weight: 700;
+        }
+
+    .disc-card-footer {
+        display: flex;
+        gap: 8px;
+        padding: 12px 16px;
+        background: #f9f9f9;
+        border-top: 1px solid #eee;
+    }
+
+    .btn-resolve {
+        padding: 8px 16px;
+        background: #2e7d32;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: background 0.2s ease;
+    }
+
+        .btn-resolve:hover {
+            background: #388e3c;
+        }
+
+    .error-message {
+        margin-top: 16px;
+        padding: 12px 16px;
+        background: #ffebee;
+        color: #c62828;
+        border-radius: 4px;
+        border-left: 4px solid #c62828;
+        font-size: 14px;
+    }
+</style>

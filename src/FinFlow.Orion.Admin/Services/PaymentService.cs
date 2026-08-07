@@ -4,6 +4,7 @@ using FinFlow.Orion.Contracts.Reconciliation.Requests;
 using FinFlow.Orion.Contracts.Reconciliation.Responses;
 using FinFlow.Orion.Contracts.Webhooks.Requests;
 using FinFlow.Orion.Contracts.Webhooks.Responses;
+using Microsoft.Extensions.Logging;
 
 namespace FinFlow.Orion.Admin.Services;
 
@@ -18,16 +19,18 @@ public sealed class PaymentService : IPaymentService
         _logger = logger;
     }
 
-    // ── Payments ────────────────────────────────────────────────────────────
+    // ── Payments ──────────────────────────────────────────────────────────────
 
-    public async Task<PaymentDto?> GetPaymentByIdAsync(
+    // ✅ PaymentDto → PaymentStatusResponse
+    public async Task<PaymentStatusResponse?> GetPaymentByIdAsync(
         Guid paymentId,
         CancellationToken cancellationToken = default)
     {
         try
         {
             _logger.LogInformation("[PaymentService] Fetching payment {PaymentId}", paymentId);
-            return await _apiClient.GetAsync<PaymentDto>(
+
+            return await _apiClient.GetAsync<PaymentStatusResponse>(
                 $"/api/v1/payments/{paymentId}",
                 cancellationToken);
         }
@@ -38,7 +41,8 @@ public sealed class PaymentService : IPaymentService
         }
     }
 
-    public async Task<PagedResponse<PaymentSummaryDto>?> GetPaymentsByCustomerAsync(
+    // ✅ PaymentSummaryDto → PaymentSummaryResponse
+    public async Task<PagedResponse<PaymentSummaryResponse>?> GetPaymentsByCustomerAsync(
         string customerId,
         int page = 1,
         int pageSize = 20,
@@ -47,28 +51,26 @@ public sealed class PaymentService : IPaymentService
         try
         {
             _logger.LogInformation(
-                "[PaymentService] Fetching payments for customer {CustomerId}",
-                customerId);
+                "[PaymentService] Fetching payments for customer {CustomerId}", customerId);
 
-            return await _apiClient.GetAsync<PagedResponse<PaymentSummaryDto>>(
+            return await _apiClient.GetAsync<PagedResponse<PaymentSummaryResponse>>(
                 $"/api/v1/payments/customer/{customerId}?page={page}&pageSize={pageSize}",
                 cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "[PaymentService] Error fetching payments for customer {CustomerId}",
-                customerId);
+                "[PaymentService] Error fetching payments for customer {CustomerId}", customerId);
             throw;
         }
     }
 
-    // ── Reconciliation ──────────────────────────────────────────────────────
+    // ── Reconciliation ────────────────────────────────────────────────────────
 
     public async Task<Guid> TriggerReconciliationAsync(
-        string provider,
-        DateOnly reconDate,
-        CancellationToken cancellationToken = default)
+    string provider,
+    DateOnly reconDate,
+    CancellationToken cancellationToken = default)
     {
         try
         {
@@ -83,18 +85,15 @@ public sealed class PaymentService : IPaymentService
                 TriggeredBy = "Admin"
             };
 
-            var response = await _apiClient.PostAsync<Guid>(
+            return await _apiClient.PostAsync<Guid>(
                 "/api/v1/reconciliation/trigger",
                 request,
                 cancellationToken);
-
-            return response ?? Guid.Empty;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "[PaymentService] Error triggering reconciliation — Provider: {Provider}",
-                provider);
+                "[PaymentService] Error triggering reconciliation — Provider: {Provider}", provider);
             throw;
         }
     }
@@ -105,7 +104,8 @@ public sealed class PaymentService : IPaymentService
     {
         try
         {
-            _logger.LogInformation("[PaymentService] Fetching reconciliation report {ReportId}", reportId);
+            _logger.LogInformation(
+                "[PaymentService] Fetching reconciliation report {ReportId}", reportId);
 
             return await _apiClient.GetAsync<ReconciliationReportResponse>(
                 $"/api/v1/reconciliation/{reportId}",
@@ -114,8 +114,7 @@ public sealed class PaymentService : IPaymentService
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "[PaymentService] Error fetching reconciliation report {ReportId}",
-                reportId);
+                "[PaymentService] Error fetching reconciliation report {ReportId}", reportId);
             throw;
         }
     }
@@ -130,8 +129,7 @@ public sealed class PaymentService : IPaymentService
         try
         {
             _logger.LogInformation(
-                "[PaymentService] Fetching discrepancies for report {ReportId}",
-                reportId);
+                "[PaymentService] Fetching discrepancies for report {ReportId}", reportId);
 
             return await _apiClient.GetAsync<PagedResponse<DiscrepancyResponse>>(
                 $"/api/v1/reconciliation/{reportId}/discrepancies?unresolvedOnly={unresolvedOnly}&page={page}&pageSize={pageSize}",
@@ -140,8 +138,7 @@ public sealed class PaymentService : IPaymentService
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "[PaymentService] Error fetching discrepancies for report {ReportId}",
-                reportId);
+                "[PaymentService] Error fetching discrepancies for report {ReportId}", reportId);
             throw;
         }
     }
@@ -175,13 +172,12 @@ public sealed class PaymentService : IPaymentService
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "[PaymentService] Error resolving discrepancy {DiscrepancyId}",
-                discrepancyId);
+                "[PaymentService] Error resolving discrepancy {DiscrepancyId}", discrepancyId);
             throw;
         }
     }
 
-    // ── Webhooks ────────────────────────────────────────────────────────────
+    // ── Webhooks ──────────────────────────────────────────────────────────────
 
     public async Task<PagedResponse<WebhookEventResponse>?> GetWebhookEventsAsync(
         string? provider = null,
@@ -218,8 +214,7 @@ public sealed class PaymentService : IPaymentService
         try
         {
             _logger.LogInformation(
-                "[PaymentService] Fetching webhook event {WebhookEventId}",
-                webhookEventId);
+                "[PaymentService] Fetching webhook event {WebhookEventId}", webhookEventId);
 
             return await _apiClient.GetAsync<WebhookEventResponse>(
                 $"/api/v1/webhooks/{webhookEventId}",
@@ -228,8 +223,7 @@ public sealed class PaymentService : IPaymentService
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "[PaymentService] Error fetching webhook event {WebhookEventId}",
-                webhookEventId);
+                "[PaymentService] Error fetching webhook event {WebhookEventId}", webhookEventId);
             throw;
         }
     }
@@ -262,8 +256,7 @@ public sealed class PaymentService : IPaymentService
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "[PaymentService] Error replaying webhook {WebhookEventId}",
-                webhookEventId);
+                "[PaymentService] Error replaying webhook {WebhookEventId}", webhookEventId);
             throw;
         }
     }
