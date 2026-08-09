@@ -36,16 +36,20 @@ public sealed class LedgerService : ILedgerService
         // Build journal
         var journal = JournalEntry.Create(
             description: $"Payment received — {paymentReference}",
-            totalAmount: amount,
+            totalAmount: CloneAmount(amount),
             postedBy: postedBy,
             paymentReference: paymentReference);
 
-        // Double-entry: Debit receivable, Credit float/settlement
+        // Double-entry: Debit receivable, Credit float/settlement.
+        // Each owned-type slot below gets its own Money instance — Money is a
+        // reference type, and EF Core's change tracker gets confused (throws an
+        // InvalidOperationException on the shadow FK) if the same instance is
+        // reused across multiple distinct owned-navigation slots.
         var debitEntry = LedgerEntry.Create(
             journalEntryId: journal.Id,
             accountId: debitAccount.Id,
             entryType: TransactionType.Debit,
-            amount: amount,
+            amount: CloneAmount(amount),
             narration: $"Payment debit — {paymentReference}",
             referenceId: paymentReference);
 
@@ -53,7 +57,7 @@ public sealed class LedgerService : ILedgerService
             journalEntryId: journal.Id,
             accountId: creditAccount.Id,
             entryType: TransactionType.Credit,
-            amount: amount,
+            amount: CloneAmount(amount),
             narration: $"Payment credit — {paymentReference}",
             referenceId: paymentReference);
 
@@ -62,8 +66,8 @@ public sealed class LedgerService : ILedgerService
         journal.Validate(); // Throws if credits ≠ debits
 
         // Apply balances
-        debitAccount.Debit(amount);
-        creditAccount.Credit(amount);
+        debitAccount.Debit(CloneAmount(amount));
+        creditAccount.Credit(CloneAmount(amount));
 
         debitAccount.AddEntry(debitEntry);
         creditAccount.AddEntry(creditEntry);
@@ -92,7 +96,7 @@ public sealed class LedgerService : ILedgerService
         // Reversal flips the original entry — Credit the debit side, Debit the credit side
         var journal = JournalEntry.Create(
             description: $"Reversal — {paymentReference} | Reason: {reason}",
-            totalAmount: amount,
+            totalAmount: CloneAmount(amount),
             postedBy: postedBy,
             paymentReference: paymentReference);
 
@@ -100,7 +104,7 @@ public sealed class LedgerService : ILedgerService
             journalEntryId: journal.Id,
             accountId: debitAccount.Id,
             entryType: TransactionType.Credit,
-            amount: amount,
+            amount: CloneAmount(amount),
             narration: $"Reversal credit — {paymentReference}",
             referenceId: paymentReference);
 
@@ -108,7 +112,7 @@ public sealed class LedgerService : ILedgerService
             journalEntryId: journal.Id,
             accountId: creditAccount.Id,
             entryType: TransactionType.Debit,
-            amount: amount,
+            amount: CloneAmount(amount),
             narration: $"Reversal debit — {paymentReference}",
             referenceId: paymentReference);
 
@@ -117,8 +121,8 @@ public sealed class LedgerService : ILedgerService
         journal.Validate();
 
         // Reverse the balances
-        debitAccount.Credit(amount);
-        creditAccount.Debit(amount);
+        debitAccount.Credit(CloneAmount(amount));
+        creditAccount.Debit(CloneAmount(amount));
 
         debitAccount.AddEntry(creditReversal);
         creditAccount.AddEntry(debitReversal);
@@ -168,6 +172,8 @@ public sealed class LedgerService : ILedgerService
     // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
+
+    private static Money CloneAmount(Money amount) => new(amount.Amount, amount.CurrencyCode);
 
     private async Task<(LedgerAccount Debit, LedgerAccount Credit)> ResolveAccountsAsync(
         string debitCode,

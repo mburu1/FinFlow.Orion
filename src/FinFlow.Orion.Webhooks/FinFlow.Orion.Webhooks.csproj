@@ -11,6 +11,8 @@
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="MediatR" Version="14.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <!-- See FinFlow.Orion.Api.csproj for why this is pinned to 2.x, not 3.x. -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.11.0" />
     <PackageReference Include="MongoDB.Driver" Version="3.10.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
@@ -24,10 +26,6 @@
   <ItemGroup>
     <ProjectReference Include="..\FinFlow.Orion.Application\FinFlow.Orion.Application.csproj" />
     <ProjectReference Include="..\FinFlow.Orion.Infrastructure\FinFlow.Orion.Infrastructure.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Data\" />
   </ItemGroup>
 
 </Project>

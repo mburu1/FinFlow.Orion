@@ -1,7 +1,6 @@
 using FinFlow.Orion.Application.Common.Interfaces;
 using FinFlow.Orion.Domain.Entities.Identity;
-//using FinFlow.Orion.Infrastructure.Auth;
-using FinFlow.Orion.Infrastructure.Configurations;
+using FinFlow.Orion.Infrastructure.Auth;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;

@@ -1,18 +1,13 @@
-
+using FinFlow.Orion.Application;
+using FinFlow.Orion.Infrastructure;
+using FinFlow.Orion.Infrastructure.Logging;
+using FinFlow.Orion.Webhooks.Parsing;
+using FinFlow.Orion.Webhooks.Security;
+using FinFlow.Orion.Webhooks.Services;
 using Serilog;
-using Serilog.Formatting.Compact;
-
 
 // ── Bootstrap logger (captures startup failures before appsettings loads) ────
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Verbose()
-    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-    .WriteTo.File(
-        path: "logs/webhooks-bootstrap-.log",
-        rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 7,
-        formatter: new CompactJsonFormatter())
-    .CreateBootstrapLogger();
+Log.Logger = SerilogConfiguration.CreateBootstrapLogger("FinFlow.Orion.Webhooks");
 
 try
 {
@@ -21,20 +16,29 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // ── Serilog ───────────────────────────────────────────────────────────────
-    builder.Host.UseSerilog((context, services, configuration) =>
-        configuration
-            .ReadFrom.Configuration(context.Configuration)
-            .ReadFrom.Services(services)
-            .Enrich.FromLogContext()
-            .Enrich.WithMachineName()
-            .Enrich.WithThreadId()
-            .Enrich.WithProperty("Application", "FinFlow.Orion.Webhooks"));
+    builder.Services.AddSerilogVerboseLogging(builder.Configuration, "FinFlow.Orion.Webhooks");
+    builder.Host.UseSerilog();
 
-    // ── Services ──────────────────────────────────────────────────────────────
+    // ── Application services ─────────────────────────────────────────────────
     builder.Services.AddControllers();
     builder.Services.AddOpenApi();
 
+    // AddApplication() must run before AddInfrastructure() — ApplicationDbContext
+    // and several Infrastructure services depend on IMediator, which is
+    // registered by AddApplication's AddMediatR call.
+    builder.Services.AddApplication();
+    builder.Services.AddInfrastructure(builder.Configuration);
+    builder.Services.AddScoped<IWebhookService, WebhookService>();
+
+    // ── Webhook security & parsing ───────────────────────────────────────────
+    builder.Services.Configure<WebhookSecurityConfiguration>(
+        builder.Configuration.GetSection(WebhookSecurityConfiguration.SectionName));
+    builder.Services.AddScoped<IWebhookSignatureVerifier, WebhookSignatureVerifier>();
+    builder.Services.AddScoped<IWebhookPayloadParser, WebhookPayloadParser>();
+
     var app = builder.Build();
+
+    Log.Information("[FinFlow.Orion.Webhooks] Host built successfully. Configuring pipeline...");
 
     // ── Middleware pipeline ───────────────────────────────────────────────────
     app.UseSerilogRequestLogging(options =>

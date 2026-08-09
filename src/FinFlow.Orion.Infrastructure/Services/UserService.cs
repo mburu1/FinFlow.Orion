@@ -45,10 +45,12 @@ public class UserService : IUserService
             throw new UnauthorizedAccessException("User account is inactive.");
 
         user.UpdateLastLogin();
-        await _userRepository.UpdateAsync(user, cancellationToken);
-
         var (accessToken, refreshToken) = _tokenService.GenerateTokens(user);
-        await _userRepository.UpdateAsync(user, cancellationToken); // Save refresh token
+
+        // Single save for both mutations — saving twice let EF's change tracker
+        // treat the newly-added RefreshToken inconsistently across two separate
+        // SaveChanges calls (concurrency exception on the second one).
+        await _userRepository.UpdateAsync(user, cancellationToken);
 
         return (user, accessToken, refreshToken);
     }

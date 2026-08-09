@@ -3,6 +3,7 @@
 @using FinFlow.Orion.Contracts.Reconciliation.Responses
 @inject ILogger<Discrepancies> Logger
 
+
 <div class="page-container">
     <div class="page-header">
         <h1>Discrepancies</h1>
@@ -17,7 +18,6 @@
             <option value="Missing">Missing</option>
         </select>
 
-        @* ✅ Fixed: was using ?? operator incorrectly on bool assignment *@
         <select class="filter-select" @onchange="@((ChangeEventArgs e) => ShowResolved = e.Value?.ToString() == "true")">
             <option value="false">Unresolved Only</option>
             <option value="true">All</option>
@@ -76,7 +76,6 @@
                     @if (!disc.IsResolved)
                     {
                         <div class="disc-card-footer">
-                            @* ✅ Fixed: ResolveDiscrepancy method now defined below *@
                             <button class="btn-resolve"
                                     @onclick="@(() => ResolveDiscrepancyAsync(disc.DiscrepancyId))">
                                 Mark as Resolved
@@ -94,14 +93,20 @@
     }
 </div>
 
+
 @code {
-    // ✅ Fixed: renamed from 'Discrepancies' to 'DiscrepancyList'
-    // to avoid CS0542 (member name same as enclosing type)
     private List<DiscrepancyResponse> DiscrepancyList = new();
     private bool IsLoading = false;
     private string SelectedType = string.Empty;
     private bool ShowResolved = false;
     private string ErrorMessage = string.Empty;
+
+    // ✅ Persists resolved state across Refresh calls (mock-layer only)
+    private static readonly HashSet<Guid> _resolvedIds = new();
+
+    // ✅ Stable GUIDs so mock data identity is consistent across reloads
+    private static readonly Guid _pay001Id = Guid.Parse("aaaaaaaa-0001-0000-0000-000000000000");
+    private static readonly Guid _pay002Id = Guid.Parse("bbbbbbbb-0002-0000-0000-000000000000");
 
     protected override async Task OnInitializedAsync()
     {
@@ -117,50 +122,45 @@
             StateHasChanged();
 
             // TODO: Replace with real API call via IReconciliationService
-            // e.g. DiscrepancyList = await ReconciliationService.GetDiscrepanciesAsync(SelectedType, ShowResolved);
+            // DiscrepancyList = await ReconciliationService.GetDiscrepanciesAsync(SelectedType, ShowResolved);
 
-            DiscrepancyList = new List<DiscrepancyResponse>
+            var rawList = new List<DiscrepancyResponse>
             {
                 new DiscrepancyResponse
                 {
-                    DiscrepancyId   = Guid.NewGuid(),
+                    DiscrepancyId    = _pay001Id,
                     PaymentReference = "PAY-001",
                     DiscrepancyType  = "AmountMismatch",
                     InternalAmount   = 5000,
                     ProviderAmount   = 4950,
                     DifferenceAmount = 50,
                     CurrencyCode     = "KES",
-                    IsResolved       = false,
+                    IsResolved       = _resolvedIds.Contains(_pay001Id),
                     DetectedAt       = DateTime.UtcNow.AddHours(-5)
                 },
                 new DiscrepancyResponse
                 {
-                    DiscrepancyId   = Guid.NewGuid(),
+                    DiscrepancyId    = _pay002Id,
                     PaymentReference = "PAY-002",
                     DiscrepancyType  = "StatusMismatch",
                     InternalAmount   = 12000,
                     ProviderAmount   = 12000,
                     DifferenceAmount = 0,
                     CurrencyCode     = "KES",
-                    IsResolved       = true,
+                    IsResolved       = _resolvedIds.Contains(_pay002Id) || true,
                     DetectedAt       = DateTime.UtcNow.AddHours(-12)
                 }
             };
 
-            // Apply filters
+            // Apply type filter
             if (!string.IsNullOrEmpty(SelectedType))
-            {
-                DiscrepancyList = DiscrepancyList
-                    .Where(d => d.DiscrepancyType == SelectedType)
-                    .ToList();
-            }
+                rawList = rawList.Where(d => d.DiscrepancyType == SelectedType).ToList();
 
+            // Apply resolved filter
             if (!ShowResolved)
-            {
-                DiscrepancyList = DiscrepancyList
-                    .Where(d => !d.IsResolved)
-                    .ToList();
-            }
+                rawList = rawList.Where(d => !d.IsResolved).ToList();
+
+            DiscrepancyList = rawList;
         }
         catch (Exception ex)
         {
@@ -174,7 +174,6 @@
         }
     }
 
-    // ✅ Fixed: ResolveDiscrepancy method now exists
     private async Task ResolveDiscrepancyAsync(Guid discrepancyId)
     {
         try
@@ -182,30 +181,16 @@
             Logger.LogInformation("Resolving discrepancy {Id}", discrepancyId);
 
             // TODO: Replace with real API call via IReconciliationService
-            // e.g. await ReconciliationService.ResolveDiscrepancyAsync(discrepancyId);
+            // await ReconciliationService.ResolveDiscrepancyAsync(discrepancyId);
+
+            // ✅ Persist resolved state so Refresh doesn't reset it
+            _resolvedIds.Add(discrepancyId);
 
             var index = DiscrepancyList.FindIndex(d => d.DiscrepancyId == discrepancyId);
             if (index >= 0)
             {
-                var old = DiscrepancyList[index];
-                var updated = new DiscrepancyResponse
-                {
-                    DiscrepancyId   = old.DiscrepancyId,
-                    ReportId        = old.ReportId,
-                    PaymentReference= old.PaymentReference,
-                    DiscrepancyType = old.DiscrepancyType,
-                    InternalAmount  = old.InternalAmount,
-                    ProviderAmount  = old.ProviderAmount,
-                    DifferenceAmount= old.DifferenceAmount,
-                    CurrencyCode    = old.CurrencyCode,
-                    IsResolved      = true,
-                    ResolvedBy      = old.ResolvedBy,
-                    ResolvedAt      = DateTime.UtcNow,
-                    Notes           = old.Notes,
-                    DetectedAt      = old.DetectedAt
-                };
-
-                DiscrepancyList[index] = updated;
+                // ✅ WithResolved() builds and returns a fully cloned object
+                DiscrepancyList[index] = DiscrepancyList[index].WithResolved();
                 StateHasChanged();
             }
         }
@@ -216,6 +201,7 @@
         }
     }
 }
+
 
 <style>
     .page-container {

@@ -1,3 +1,4 @@
+using FinFlow.Orion.Application.Sagas;
 using FinFlow.Orion.Domain.Entities.Ledger;
 using FinFlow.Orion.Domain.Entities.Payments;
 using FinFlow.Orion.Domain.Entities.Reconciliation;
@@ -32,10 +33,10 @@ public sealed class ApplicationDbContext : DbContext
     public DbSet<PaymentAttempt> PaymentAttempts => Set<PaymentAttempt>();
     public DbSet<PaymentProviderConfig> PaymentProviders => Set<PaymentProviderConfig>();
 
-    // ── Ledger ────────────────────────────────────────────────────────────────
-    public DbSet<LedgerAccount> LedgerAccounts => Set<LedgerAccount>();
-    public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
-    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
+    // Ledger entities are owned exclusively by LedgerDbContext — see that
+    // context's XML doc for the bounded-context rationale. Do not add
+    // DbSet<LedgerAccount>/<LedgerEntry>/<JournalEntry> here; they are
+    // excluded from this model via Ignore<T>() below.
 
     // ── Reconciliation ────────────────────────────────────────────────────────
     public DbSet<ReconciliationReport> ReconciliationReports => Set<ReconciliationReport>();
@@ -52,10 +53,20 @@ public sealed class ApplicationDbContext : DbContext
     // ── Idempotency ───────────────────────────────────────────────────────────
     public DbSet<IdempotencyRecord> IdempotencyKeys => Set<IdempotencyRecord>();
 
+    // ── Payment Saga ──────────────────────────────────────────────────────────
+    public DbSet<PaymentSagaState> PaymentSagaStates => Set<PaymentSagaState>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(ApplicationDbContext).Assembly,
+            type => !type.Name.Contains("Ledger") && !type.Name.Contains("Journal"));
+
+        modelBuilder.Ignore<LedgerAccount>();
+        modelBuilder.Ignore<LedgerEntry>();
+        modelBuilder.Ignore<JournalEntry>();
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -96,12 +107,14 @@ public sealed class ApplicationDbContext : DbContext
 
         var outboxMessages = aggregates
             .SelectMany(aggregate => aggregate.DomainEvents.Select(domainEvent =>
-                OrionOutbox.Create(
-                    type: domainEvent.GetType().FullName!,
-                    payload: System.Text.Json.JsonSerializer.Serialize(
-                        domainEvent, domainEvent.GetType()),
+            {
+                var (typeName, payload) = Messaging.IntegrationEventMap.Map(domainEvent);
+                return OrionOutbox.Create(
+                    type: typeName,
+                    payload: System.Text.Json.JsonSerializer.Serialize(payload, payload.GetType()),
                     aggregateId: aggregate.Id.ToString(),
-                    aggregateType: aggregate.GetType().Name)))
+                    aggregateType: aggregate.GetType().Name);
+            }))
             .ToList();
 
         OutboxMessages.AddRange(outboxMessages);

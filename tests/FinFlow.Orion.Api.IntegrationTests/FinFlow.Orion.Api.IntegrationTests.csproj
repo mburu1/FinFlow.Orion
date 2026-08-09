@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>AnyCPU;x64</Platforms>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- Pinned to the last Apache-2.0-licensed release — FluentAssertions 8+ requires a paid commercial license. -->
+    <PackageReference Include="FluentAssertions" Version="7.2.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.13.0" />
+    <PackageReference Include="Testcontainers.MongoDb" Version="4.13.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FinFlow.Orion.Api\FinFlow.Orion.Api.csproj" />
+    <ProjectReference Include="..\..\src\FinFlow.Orion.Infrastructure\FinFlow.Orion.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <!-- The FinFlow.Orion.Api ProjectReference transitively pulls in an xunit v3
+       compatibility bridge that duplicates types already provided by the xunit v2
+       packages above (FactAttribute, ICollectionFixture, etc. — CS0433). This
+       project intentionally uses xunit v2; exclude the v3 bridge's compile-time
+       assets (xunit.v3.core.dll lives in xunit.v3.extensibility.core) so only the
+       v2 types resolve. -->
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.extensibility.core" Version="3.2.2">
+      <ExcludeAssets>compile</ExcludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

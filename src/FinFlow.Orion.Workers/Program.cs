@@ -1,23 +1,15 @@
 using FinFlow.Orion.Application;
 using FinFlow.Orion.Application.Common.Interfaces;
 using FinFlow.Orion.Infrastructure;
-using FinFlow.Orion.Ledger;
+using FinFlow.Orion.Infrastructure.Logging;
+using FinFlow.Orion.Infrastructure.Messaging;
 using FinFlow.Orion.Workers.Jobs;
 using FinFlow.Orion.Workers.Services;
 using Quartz;
 using Serilog;
-using Serilog.Formatting.Compact;
 
 // ── Bootstrap logger (captures startup failures before appsettings loads) ────
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Verbose()
-    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-    .WriteTo.File(
-        path: "logs/workers-bootstrap-.log",
-        rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 7,
-        formatter: new CompactJsonFormatter())
-    .CreateBootstrapLogger();
+Log.Logger = SerilogConfiguration.CreateBootstrapLogger("FinFlow.Orion.Workers");
 
 try
 {
@@ -26,24 +18,23 @@ try
     var builder = Host.CreateApplicationBuilder(args);
 
     // ── Serilog ───────────────────────────────────────────────────────────────
-    builder.Services.AddSerilog((services, config) =>
-        config
-            .ReadFrom.Configuration(builder.Configuration)
-            .ReadFrom.Services(services)
-            .Enrich.FromLogContext()
-            .Enrich.WithMachineName()
-            .Enrich.WithThreadId()
-            .Enrich.WithProperty("Application", "FinFlow.Orion.Workers"));
+    builder.Services.AddSerilogVerboseLogging(builder.Configuration, "FinFlow.Orion.Workers");
 
-    // ── Application + Infrastructure + Ledger ─────────────────────────────────
+    // ── Application + Infrastructure ──────────────────────────────────────────
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
-    builder.Services.AddLedger();
 
     // ── Worker services ───────────────────────────────────────────────────────
     builder.Services.AddScoped<IDateTimeService, DateTimeService>();
     builder.Services.AddScoped<IWorkerOutboxPublisher, WorkerOutboxPublisher>();
     builder.Services.AddScoped<JobScheduler>();
+
+    // ── Messaging (MassTransit / RabbitMQ) — bus + consumers live only here ────
+    // MassTransit 9+ requires a license at bus-build time: set the MT_LICENSE
+    // (or MT_LICENSE_PATH) environment variable before running this process,
+    // otherwise startup fails with MassTransit.ConfigurationException. See the
+    // README's "Known limitations" section.
+    builder.Services.AddMessaging(builder.Configuration);
 
     // ── Quartz ────────────────────────────────────────────────────────────────
     builder.Services.AddQuartz();

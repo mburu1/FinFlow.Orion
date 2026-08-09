@@ -13,17 +13,20 @@ public sealed class RetryPaymentCommandHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly IIdempotencyService _idempotencyService;
     private readonly IPaymentRepository _paymentRepository;
+    private readonly IPaymentProviderDispatcher _dispatcher;
     private readonly ILogger<RetryPaymentCommandHandler> _logger;
 
     public RetryPaymentCommandHandler(
         IUnitOfWork unitOfWork,
         IIdempotencyService idempotencyService,
         IPaymentRepository paymentRepository,
+        IPaymentProviderDispatcher dispatcher,
         ILogger<RetryPaymentCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
         _idempotencyService = idempotencyService;
         _paymentRepository = paymentRepository;
+        _dispatcher = dispatcher;
         _logger = logger;
     }
 
@@ -38,16 +41,30 @@ public sealed class RetryPaymentCommandHandler
         var payment = await _paymentRepository.GetByIdAsync(request.PaymentId, cancellationToken)
             ?? throw new NotFoundException(nameof(Domain.Entities.Payments.Payment), request.PaymentId);
 
-        if (payment.Status == PaymentStatus.Captured)
-            throw new InvalidOperationException("Cannot retry a successfully captured payment.");
+        if (payment.Status != PaymentStatus.Failed)
+            throw new Domain.Exceptions.InvalidPaymentException(
+                $"Cannot retry a payment in {payment.Status} status — only a Failed payment can be retried.");
 
-        // Override provider if saga is routing to a fallback
-        if (request.OverrideProvider is not null
-            && Enum.TryParse<PaymentProvider>(request.OverrideProvider, true, out var fallbackProvider))
+        var resolvedProvider = payment.Provider;
+        if (request.OverrideProvider is not null)
         {
+            if (!Enum.TryParse<PaymentProvider>(request.OverrideProvider, true, out resolvedProvider))
+                throw new NotFoundException($"Payment provider '{request.OverrideProvider}' is not supported.");
+
             _logger.LogInformation("[Retry] Routing payment {Id} to fallback provider {Provider}",
-                payment.Id, fallbackProvider);
+                payment.Id, resolvedProvider);
         }
+
+        payment.ResetForRetry(resolvedProvider);
+
+        var attemptNumber = payment.Attempts.Count + 1;
+        await PaymentDispatchProcessor.DispatchAndTransitionAsync(
+            payment,
+            _dispatcher,
+            attemptNumber,
+            _logger,
+            bankTransferDetails: null,
+            cancellationToken);
 
         await _idempotencyService.StoreAsync(
             request.IdempotencyKey,
@@ -57,7 +74,8 @@ public sealed class RetryPaymentCommandHandler
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("[Retry] Retrying payment {Reference}", payment.Reference.Reference);
+        _logger.LogInformation("[Retry] Retried payment {Reference} via {Provider} — Status: {Status}",
+            payment.Reference.Reference, resolvedProvider, payment.Status);
 
         return new InitiatePaymentResponse
         {

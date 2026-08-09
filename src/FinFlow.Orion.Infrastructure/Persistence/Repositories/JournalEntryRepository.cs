@@ -52,5 +52,6 @@ public sealed class JournalEntryRepository : IJournalEntryRepository
         CancellationToken cancellationToken = default)
     {
         await _context.JournalEntries.AddAsync(journalEntry, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
     }
 }

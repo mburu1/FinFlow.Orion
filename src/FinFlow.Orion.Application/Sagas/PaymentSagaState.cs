@@ -2,6 +2,7 @@ namespace FinFlow.Orion.Application.Sagas;
 
 public sealed class PaymentSagaState
 {
+    public Guid Id { get; set; } = Guid.NewGuid();
     public Guid PaymentId { get; set; }
     public string CurrentStep { get; set; } = string.Empty;
     public int RetryCount { get; set; }

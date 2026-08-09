@@ -1,30 +1,53 @@
+/* MainLayout.razor.css */
 .page {
     position: relative;
     display: flex;
     flex-direction: row;
-    height: 100%;
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
 }
 
 .sidebar {
-    background-image: linear-gradient(180deg, rgb(5, 5, 5) 0%, #333 70%);
+    background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%);
     position: fixed;
     top: 0;
-    bottom: 0;
     left: 0;
+    bottom: 0;
     z-index: 1000;
-    padding: 0;
     width: 250px;
-    height: 100vh;
     overflow-y: auto;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
 }
 
 .main {
     flex: 1;
+    margin-left: 250px;
     overflow-y: auto;
-    padding: 0;
+    padding: 24px;
+    background-color: #f5f7fa;
+    min-height: 100vh;
 }
 
 .top-row {
     background-color: #f7f7f7;
-    border-bottom: 1px solid #d6d5;
+    border-bottom: 1px solid #d6d5d5;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        position: relative;
+        height: auto;
+    }
+
+    .main {
+        margin-left: 0;
+        padding: 16px;
+    }
+
+    .page {
+        flex-direction: column;
+    }
 }
