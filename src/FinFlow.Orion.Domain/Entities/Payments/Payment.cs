@@ -121,6 +121,20 @@ public sealed class Payment : AggregateRoot, IAuditableEntity
     public void AddAttempt(PaymentAttempt attempt)
         => _attempts.Add(attempt);
 
+    /// <summary>
+    /// Resets a failed payment back to Pending under a (possibly different) provider,
+    /// so it can be re-dispatched — used by the payment saga's fallback chain and
+    /// manual retries.
+    /// </summary>
+    public void ResetForRetry(PaymentProvider newProvider)
+    {
+        EnsureStatus(PaymentStatus.Failed);
+        Provider = newProvider;
+        Status = PaymentStatus.Pending;
+        ProviderResponse = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     private void EnsureStatus(PaymentStatus expected)
     {
         if (Status != expected)

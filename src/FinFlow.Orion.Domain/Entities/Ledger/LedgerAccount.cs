@@ -43,19 +43,21 @@ public sealed class LedgerAccount : AggregateRoot, IAuditableEntity
         };
     }
 
+    // Standard double-entry semantics: a debit increases Asset/Expense accounts and
+    // decreases Liability/Revenue(/Equity) accounts; a credit does the opposite.
     public void Credit(Money amount)
     {
         Balance = AccountType is LedgerAccountType.Asset or LedgerAccountType.Expense
-            ? Balance.Add(amount)
-            : Balance.Subtract(amount);
+            ? Balance.Subtract(amount)
+            : Balance.Add(amount);
         UpdatedAt = DateTime.UtcNow;
     }
 
     public void Debit(Money amount)
     {
         Balance = AccountType is LedgerAccountType.Asset or LedgerAccountType.Expense
-            ? Balance.Subtract(amount)
-            : Balance.Add(amount);
+            ? Balance.Add(amount)
+            : Balance.Subtract(amount);
         UpdatedAt = DateTime.UtcNow;
     }
 

@@ -1,7 +1,6 @@
 using FinFlow.Orion.Application.Common.Interfaces;
 using FinFlow.Orion.Infrastructure.Auth;
 using FinFlow.Orion.Infrastructure.Idempotency;
-using FinFlow.Orion.Infrastructure.Jobs;
 using FinFlow.Orion.Infrastructure.Persistence; // For UnitOfWork, ApplicationDbContext, LedgerDbContext
 using FinFlow.Orion.Infrastructure.Persistence.Outbox;
 using FinFlow.Orion.Infrastructure.Persistence.Repositories; // For LedgerRepository, etc.
@@ -12,13 +11,12 @@ using FinFlow.Orion.Infrastructure.Services;
 using FinFlow.Orion.Infrastructure.Webhooks;
 using FinFlow.Orion.Ledger.Abstractions;
 using FinFlow.Orion.Ledger.Services;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Quartz;
 using Refit;
 using System;
 
@@ -31,16 +29,14 @@ namespace FinFlow.Orion.Infrastructure
             IConfiguration configuration)
         {
             // ── DbContexts ────────────────────────────────────────────────────────
-            services.AddDbContext<ApplicationDbContext>((sp, options) =>
+            services.AddDbContext<ApplicationDbContext>(options =>
             {
                 options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
-                options.UseLoggerFactory(sp.GetRequiredService<ILoggerFactory>());
             });
 
-            services.AddDbContext<LedgerDbContext>((sp, options) =>
+            services.AddDbContext<LedgerDbContext>(options =>
             {
                 options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
-                options.UseLoggerFactory(sp.GetRequiredService<ILoggerFactory>());
             });
 
             // ── Unit of Work & Repositories ───────────────────────────────────────
@@ -50,6 +46,7 @@ namespace FinFlow.Orion.Infrastructure
             services.AddScoped<IPaymentRepository, PaymentRepository>();
             services.AddScoped<IReconciliationRepository, ReconciliationRepository>();
             services.AddScoped<IWebhookRepository, WebhookRepository>();
+            services.AddScoped<IPaymentSagaStateRepository, PaymentSagaStateRepository>();
             services.AddScoped<IOutboxService, OutboxService>();
             // Inside AddInfrastructure method:
             services.AddScoped<IUserRepository, UserRepository>();
@@ -67,6 +64,8 @@ namespace FinFlow.Orion.Infrastructure
 
             services.Configure<BankConfiguration>(configuration.GetSection(BankConfiguration.SectionName));
             services.AddScoped<IBankProvider, BankProvider>();
+
+            services.AddScoped<IPaymentProviderDispatcher, Providers.PaymentProviderDispatcher>();
 
             // ── Refit ─────────────────────────────────────────────────────────────
             services.AddRefitClient<IMpesaClient>()
@@ -86,13 +85,12 @@ namespace FinFlow.Orion.Infrastructure
 
             // ── Services ──────────────────────────────────────────────────────────
             services.AddScoped<IDateTimeService, DateTimeService>();
-            services.AddScoped<IOutboxPublisher, OutboxPublisher>();
-            services.AddScoped<ILedgerService, LedgerService>();
+            services.TryAddScoped<ILedgerService, LedgerService>();
 
-            // ── Quartz Jobs ───────────────────────────────────────────────────────
-            services.AddQuartz();
-            services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
-            services.AddScoped<JobScheduler>();
+            // Quartz job scheduling (Outbox processor, Reconciliation) is owned
+            // solely by FinFlow.Orion.Workers — see Workers/Program.cs. Api and
+            // Webhooks only write outbox rows via ApplicationDbContext.SaveChangesAsync;
+            // they don't run the scheduler.
 
             return services;
         }

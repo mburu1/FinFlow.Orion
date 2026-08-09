@@ -15,17 +15,20 @@ public sealed class InitiatePaymentCommandHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly IIdempotencyService _idempotencyService;
     private readonly IPaymentRepository _paymentRepository;
+    private readonly IPaymentProviderDispatcher _dispatcher;
     private readonly ILogger<InitiatePaymentCommandHandler> _logger;
 
     public InitiatePaymentCommandHandler(
         IUnitOfWork unitOfWork,
         IIdempotencyService idempotencyService,
         IPaymentRepository paymentRepository,
+        IPaymentProviderDispatcher dispatcher,
         ILogger<InitiatePaymentCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
         _idempotencyService = idempotencyService;
         _paymentRepository = paymentRepository;
+        _dispatcher = dispatcher;
         _logger = logger;
     }
 
@@ -64,6 +67,24 @@ public sealed class InitiatePaymentCommandHandler
             description: request.Description);
 
         await _paymentRepository.AddAsync(payment, cancellationToken);
+
+        BankTransferDetails? bankTransferDetails =
+            provider == PaymentProvider.BankTransfer
+                && request.BankAccountNumber is not null
+                && request.BankCode is not null
+                && request.BankAccountName is not null
+                ? new BankTransferDetails(request.BankAccountNumber, request.BankCode, request.BankAccountName)
+                : null;
+
+        await PaymentDispatchProcessor.DispatchAndTransitionAsync(
+            payment,
+            _dispatcher,
+            attemptNumber: 1,
+            _logger,
+            bankTransferDetails,
+            cancellationToken);
+
+        // Creation, dispatch outcome, domain events, and outbox rows all commit together.
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Store idempotency key to prevent replays
@@ -73,8 +94,8 @@ public sealed class InitiatePaymentCommandHandler
             TimeSpan.FromHours(24),
             cancellationToken);
 
-        _logger.LogInformation("[Payment] Initiated {Reference} via {Provider}",
-            payment.Reference.Reference, provider);
+        _logger.LogInformation("[Payment] Initiated {Reference} via {Provider} — Status: {Status}",
+            payment.Reference.Reference, provider, payment.Status);
 
         return new InitiatePaymentResponse
         {

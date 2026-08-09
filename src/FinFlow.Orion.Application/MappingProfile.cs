@@ -26,6 +26,9 @@ public static class MappingProfile
             request.CustomerId,
             request.PhoneNumber,
             request.Description,
+            request.BankAccountNumber,
+            request.BankCode,
+            request.BankAccountName,
             request.Metadata);
 
     public static RetryPaymentCommand ToCommand(this RetryPaymentRequest request) =>

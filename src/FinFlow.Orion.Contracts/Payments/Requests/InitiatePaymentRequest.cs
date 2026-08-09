@@ -10,5 +10,11 @@ public sealed class InitiatePaymentRequest
     public string? CustomerId { get; init; }
     public string? PhoneNumber { get; init; }
     public string? Description { get; init; }
+
+    // Required only when Provider == "BankTransfer".
+    public string? BankAccountNumber { get; init; }
+    public string? BankCode { get; init; }
+    public string? BankAccountName { get; init; }
+
     public Dictionary<string, string> Metadata { get; init; } = [];
 }

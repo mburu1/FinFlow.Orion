@@ -12,5 +12,8 @@ public sealed record InitiatePaymentCommand(
     string? CustomerId,
     string? PhoneNumber,
     string? Description,
+    string? BankAccountNumber = null,
+    string? BankCode = null,
+    string? BankAccountName = null,
     Dictionary<string, string>? Metadata = null
 ) : IRequest<InitiatePaymentResponse>;

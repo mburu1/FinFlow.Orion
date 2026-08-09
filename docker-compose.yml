@@ -1,0 +1,134 @@
+name: finflow-orion
+
+# One-command local environment for FinFlow.Orion: SQL Server, MongoDB, RabbitMQ,
+# and the four deployable processes (Api, Webhooks, Workers, Admin).
+#
+# Quick start:
+#   JWT_KEY=$(openssl rand -base64 48) MSSQL_SA_PASSWORD='Your_Strong_Passw0rd!' MT_LICENSE='<your MassTransit license key>' docker compose up -d
+#
+# MT_LICENSE is required by the workers service — MassTransit 9+ needs a license
+# key at bus-build time (see "Known limitations" in README.md). Omit `workers`
+# from the command above (docker compose up -d sqlserver mongodb rabbitmq api webhooks admin)
+# if you don't have one yet; everything except the outbox-publish/saga pipeline still works.
+#
+# Host ports are deliberately non-default (1434, 27018, 5673/15673) to avoid
+# colliding with any locally-installed SQL Server/Mongo/RabbitMQ, or with other
+# RabbitMQ containers already running on this machine.
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD (a strong password) before starting}"
+    ports:
+      - "1434:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: src/FinFlow.Orion.Api/Dockerfile
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=FinFlowOrion;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;"
+      MongoDB__ConnectionString: "mongodb://mongodb:27017"
+      Jwt__Key: "${JWT_KEY:?Set JWT_KEY (32+ random characters) before starting}"
+
+  webhooks:
+    build:
+      context: .
+      dockerfile: src/FinFlow.Orion.Webhooks/Dockerfile
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "5001:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=FinFlowOrion;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;"
+      MongoDB__ConnectionString: "mongodb://mongodb:27017"
+      Webhooks__Security__MPesa__SharedSecret: "${MPESA_WEBHOOK_SECRET:-}"
+      Webhooks__Security__Card__SigningSecret: "${CARD_WEBHOOK_SECRET:-}"
+      Webhooks__Security__Bank__SigningSecret: "${BANK_WEBHOOK_SECRET:-}"
+
+  workers:
+    build:
+      context: .
+      dockerfile: src/FinFlow.Orion.Workers/Dockerfile
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DOTNET_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=FinFlowOrion;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;"
+      MongoDB__ConnectionString: "mongodb://mongodb:27017"
+      RabbitMq__Host: "rabbitmq"
+      RabbitMq__Port: "5672"
+      RabbitMq__Username: "guest"
+      RabbitMq__Password: "guest"
+      # MassTransit 9+ requires a license at bus-build time — set this to your
+      # license key before starting, or Workers will fail to start. See the
+      # README's "Known limitations" section.
+      MT_LICENSE: "${MT_LICENSE:?Set MT_LICENSE (a MassTransit license key) before starting Workers}"
+
+  admin:
+    build:
+      context: .
+      dockerfile: src/FinFlow.Orion.Admin/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "8081:80"
+    environment:
+      API_BASE_URL: "${ADMIN_API_BASE_URL:-http://localhost:5000}"
+
+volumes:
+  sqlserver-data:
+  mongo-data:

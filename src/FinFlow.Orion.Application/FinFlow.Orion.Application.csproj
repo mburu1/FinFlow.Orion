@@ -3,14 +3,18 @@
   <ItemGroup>
     <ProjectReference Include="..\FinFlow.Orion.Domain\FinFlow.Orion.Domain.csproj" />
     <ProjectReference Include="..\FinFlow.Orion.Contracts\FinFlow.Orion.Contracts.csproj" />
+    <ProjectReference Include="..\FinFlow.Orion.Ledger\FinFlow.Orion.Ledger.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+    <!-- MassTransit 9+ requires a license key at runtime (SetLicense or the
+         MT_LICENSE/MT_LICENSE_PATH environment variable) — see Workers/Program.cs
+         and the README's "Known limitations" section. -->
+    <PackageReference Include="MassTransit" Version="9.2.0" />
     <PackageReference Include="MediatR" Version="14.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 

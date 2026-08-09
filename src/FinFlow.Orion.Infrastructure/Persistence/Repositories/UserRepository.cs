@@ -1,11 +1,10 @@
-﻿using FinFlow.Orion.Application.Common.Interfaces; // Ensure this is here
+﻿using FinFlow.Orion.Application.Common.Interfaces;
 using FinFlow.Orion.Domain.Entities.Identity;
-using FinFlow.Orion.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace FinFlow.Orion.Infrastructure.Persistence.Repositories;
 
-public class UserRepository : IUserRepository
+public sealed class UserRepository : IUserRepository
 {
     private readonly ApplicationDbContext _context;
 
@@ -14,34 +13,85 @@ public class UserRepository : IUserRepository
         _context = context;
     }
 
-    public async Task<AppUser?> FindByEmailAsync(string email, CancellationToken cancellationToken = default)
+    // =========================================================================
+    // FIND BY EMAIL
+    // =========================================================================
+
+    public async Task<AppUser?> FindByEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+
+        return await _context.Users
+            .Include(u => u.RefreshTokens)
+            .FirstOrDefaultAsync(
+                u => u.Email == normalizedEmail,
+                cancellationToken);
+    }
+
+    // =========================================================================
+    // GET BY ID
+    // =========================================================================
+
+    public async Task<AppUser?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         return await _context.Users
             .Include(u => u.RefreshTokens)
-            .FirstOrDefaultAsync(u => u.Email == email.ToLowerInvariant(), cancellationToken);
+            .FirstOrDefaultAsync(
+                u => u.Id == id,
+                cancellationToken);
     }
 
-    public async Task<AppUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    // =========================================================================
+    // ADD USER
+    // =========================================================================
+
+    public async Task AddAsync(
+        AppUser user,
+        CancellationToken cancellationToken = default)
     {
-        return await _context.Users
-            .Include(u => u.RefreshTokens)
-            .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+        await _context.Users.AddAsync(
+            user,
+            cancellationToken);
+
+        await _context.SaveChangesAsync(
+            cancellationToken);
     }
 
-    public async Task AddAsync(AppUser user, CancellationToken cancellationToken = default)
+    // =========================================================================
+    // UPDATE USER
+    // =========================================================================
+
+    public async Task UpdateAsync(
+        AppUser user,
+        CancellationToken cancellationToken = default)
     {
-        await _context.Users.AddAsync(user, cancellationToken);
+        // Only force the whole graph to Modified for a genuinely detached entity.
+        // Calling Update() on an already-tracked entity (the normal case — callers
+        // load-then-mutate within the same scope) incorrectly flips newly-added
+        // child entities (e.g. a fresh RefreshToken) from Added to Modified, which
+        // makes EF emit an UPDATE for a row that doesn't exist yet.
+        if (_context.Entry(user).State == EntityState.Detached)
+            _context.Users.Update(user);
+
+        await _context.SaveChangesAsync(
+            cancellationToken);
     }
 
-    public async Task UpdateAsync(AppUser user, CancellationToken cancellationToken = default)
-    {
-        _context.Users.Update(user);
-        await _context.SaveChangesAsync(cancellationToken);
-    }
+    // =========================================================================
+    // GET REFRESH TOKEN
+    // =========================================================================
 
-    public async Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken cancellationToken = default)
+    public async Task<RefreshToken?> GetRefreshTokenAsync(
+        string token,
+        CancellationToken cancellationToken = default)
     {
         return await _context.RefreshTokens
-            .FirstOrDefaultAsync(t => t.Token == token, cancellationToken);
+            .FirstOrDefaultAsync(
+                t => t.Token == token,
+                cancellationToken);
     }
 }

@@ -53,12 +53,20 @@ namespace FinFlow.Orion.Infrastructure.Persistence.Repositories
             await _context.LedgerAccounts.AddAsync(account, cancellationToken);
         }
 
-        public Task UpdateAsync(
+        public async Task UpdateAsync(
             LedgerAccount account,
             CancellationToken cancellationToken = default)
         {
-            _context.LedgerAccounts.Update(account);
-            return Task.CompletedTask;
+            // Only force the whole graph to Modified for a genuinely detached
+            // entity — LedgerService loads accounts via GetByCodeAsync (already
+            // tracked) and its LedgerEntry children are typically already saved
+            // via JournalEntryRepository.AddAsync by the time this runs, so an
+            // unconditional Update() risks the same Added→Modified graph-tracking
+            // hazard fixed in UserRepository.UpdateAsync.
+            if (_context.Entry(account).State == EntityState.Detached)
+                _context.LedgerAccounts.Update(account);
+
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
         // ── LedgerEntry Methods ───────────────────────────────────────────────

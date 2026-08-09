@@ -6,6 +6,7 @@ public interface IPaymentRepository
 {
     Task<Payment?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Payment?> GetByReferenceAsync(string reference, CancellationToken cancellationToken = default);
+    Task<Payment?> GetByProviderTransactionIdAsync(string providerTransactionId, CancellationToken cancellationToken = default);
     Task<(IReadOnlyList<Payment> Items, int TotalCount)> GetByCustomerIdAsync(
         string customerId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task AddAsync(Payment payment, CancellationToken cancellationToken = default);

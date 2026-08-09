@@ -28,6 +28,13 @@ public sealed class PaymentRepository : IPaymentRepository
             .FirstOrDefaultAsync(p => p.Reference.Reference == reference, cancellationToken);
     }
 
+    public async Task<Payment?> GetByProviderTransactionIdAsync(string providerTransactionId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Payments
+            .Include(p => p.Attempts)
+            .FirstOrDefaultAsync(p => p.ProviderResponse!.ProviderTransactionId == providerTransactionId, cancellationToken);
+    }
+
     public async Task<(IReadOnlyList<Payment> Items, int TotalCount)> GetByCustomerIdAsync(
         string customerId,
         int page,

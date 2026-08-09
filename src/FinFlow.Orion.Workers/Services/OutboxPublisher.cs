@@ -1,4 +1,6 @@
-using FinFlow.Orion.Infrastructure.Persistence.Outbox;
+using System.Text.Json;
+using FinFlow.Orion.Infrastructure.Messaging;
+using MassTransit;
 using Microsoft.Extensions.Logging;
 
 namespace FinFlow.Orion.Workers.Services;
@@ -12,31 +14,44 @@ public interface IWorkerOutboxPublisher
 }
 
 /// <summary>
-/// Worker-side outbox publisher.
-/// Deserializes the stored payload and dispatches it to MassTransit.
-/// Kept separate from the API-side OutboxPublisher to avoid circular dependencies.
+/// Worker-side outbox publisher. Resolves the stored payload's CLR type via
+/// IntegrationEventMap.TypeRegistry, deserializes it, and dispatches it onto the
+/// MassTransit bus. Kept separate from the API-side outbox writer to avoid
+/// circular dependencies.
 /// </summary>
 public sealed class WorkerOutboxPublisher : IWorkerOutboxPublisher
 {
+    private readonly IPublishEndpoint _publishEndpoint;
     private readonly ILogger<WorkerOutboxPublisher> _logger;
 
-    public WorkerOutboxPublisher(ILogger<WorkerOutboxPublisher> logger)
-        => _logger = logger;
+    public WorkerOutboxPublisher(
+        IPublishEndpoint publishEndpoint,
+        ILogger<WorkerOutboxPublisher> logger)
+    {
+        _publishEndpoint = publishEndpoint;
+        _logger = logger;
+    }
 
-    public Task PublishAsync(
+    public async Task PublishAsync(
         string type,
         string payload,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Resolve the actual Type from the assembly and publish via MassTransit
-        // Example:
-        //   var eventType = Type.GetType(type);
-        //   var @event    = JsonSerializer.Deserialize(payload, eventType!);
-        //   await _publishEndpoint.Publish(@event!, eventType!, cancellationToken);
+        if (!IntegrationEventMap.TypeRegistry.TryGetValue(type, out var eventType))
+        {
+            _logger.LogWarning(
+                "[WorkerOutboxPublisher] Unknown outbox message type {Type} — skipping publish. " +
+                "It will still be marked processed so it doesn't block the batch.",
+                type);
+            return;
+        }
+
+        var @event = JsonSerializer.Deserialize(payload, eventType)
+            ?? throw new InvalidOperationException($"Failed to deserialize outbox payload as {eventType.Name}.");
+
+        await _publishEndpoint.Publish(@event, eventType, cancellationToken);
 
         _logger.LogInformation(
-            "[WorkerOutboxPublisher] Publishing — Type: {Type}", type);
-
-        return Task.CompletedTask;
+            "[WorkerOutboxPublisher] Published {Type}", type);
     }
 }

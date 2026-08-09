@@ -35,5 +35,25 @@ public sealed class InitiatePaymentCommandValidator
             .Matches(@"^\+?[0-9]{9,15}$")
             .When(x => x.PhoneNumber is not null)
             .WithMessage("Invalid phone number format.");
+
+        RuleFor(x => x.PhoneNumber)
+            .NotEmpty()
+            .When(x => "MPesa".Equals(x.Provider, StringComparison.OrdinalIgnoreCase))
+            .WithMessage("PhoneNumber is required when Provider is 'MPesa'.");
+
+        RuleFor(x => x.BankAccountNumber)
+            .NotEmpty()
+            .When(x => "BankTransfer".Equals(x.Provider, StringComparison.OrdinalIgnoreCase))
+            .WithMessage("BankAccountNumber is required when Provider is 'BankTransfer'.");
+
+        RuleFor(x => x.BankCode)
+            .NotEmpty()
+            .When(x => "BankTransfer".Equals(x.Provider, StringComparison.OrdinalIgnoreCase))
+            .WithMessage("BankCode is required when Provider is 'BankTransfer'.");
+
+        RuleFor(x => x.BankAccountName)
+            .NotEmpty()
+            .When(x => "BankTransfer".Equals(x.Provider, StringComparison.OrdinalIgnoreCase))
+            .WithMessage("BankAccountName is required when Provider is 'BankTransfer'.");
     }
 }
